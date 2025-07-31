@@ -96,12 +96,11 @@ def shell(
     """
     # curr_dir = os.getcwd()
     # os.chdir(working_directory)
-    print(working_directory)
+    logger.info(f"shell is in {working_directory}")
     if environment is None:
         environment = {}
     if arguments is None:
         arguments = []
-    logger.info(f"shell is in {os.getcwd()}")
     environ = dict(os.environ)
     environ.update({k: str(v) for k, v in environment.items()})
     proc = subprocess.run(
@@ -145,7 +144,7 @@ def isLineInFile(filepath: str, line: str, exact_match: bool = True) -> bool:
                     line_found = True
                     break  # Exit loop if a partial match is found
     except FileNotFoundError:
-        logger.info(f"File '{filepath}' not found.")
+        logger.error(f"File '{filepath}' not found.")
     return line_found
     
 @pwf.as_function_node("working_directory")
@@ -185,7 +184,7 @@ def delete_files_recursively(working_directory: str, files_to_be_deleted: list[s
         files_to_be_deleted (list[str]): List of filenames to delete.
     """
     if not os.path.isdir(working_directory):
-        logger.info(f"Error: {working_directory} is not a valid directory.")
+        logger.error(f"Error: {working_directory} is not a valid directory.")
     else:
         for root, _, files in os.walk(working_directory):
             for file in files:
@@ -195,7 +194,7 @@ def delete_files_recursively(working_directory: str, files_to_be_deleted: list[s
                         os.remove(file_path)
                         logger.info(f"Deleted: {file_path}")
                     except Exception as e:
-                        logger.info(f"Error deleting {file_path}: {e}")
+                        logger.error(f"Error deleting {file_path}: {e}")
     return working_directory
 
 @Workflow.wrap.as_function_node("compressed_file")

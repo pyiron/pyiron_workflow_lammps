@@ -1,14 +1,13 @@
-from dataclasses import dataclass, field
-from typing import Any, Callable, List, Optional, Sequence, Tuple, Union
+# Standard library imports
 import os
-import textwrap
-import warnings
+from typing import Any, Callable, List, Optional
+
 import numpy as np
-from ase import Atoms
+# Local imports
 import pyiron_workflow as pwf
-from pyiron_workflow_lammps.generic import shell, create_WorkingDirectory
-from pyiron_lammps import parse_lammps_output_files, write_lammps_structure
-from pyiron_snippets import logger
+from pyiron_snippets.logger import logger
+from ase import Atoms
+
     
 @pwf.as_function_node("working_directory")
 def write_LammpsStructure(structure,
@@ -16,6 +15,7 @@ def write_LammpsStructure(structure,
                          potential_elements,
                          units="metal",
                          file_name="lammps.data"):
+    from pyiron_lammps import write_lammps_structure
     write_lammps_structure(
                             structure=structure,
                             potential_elements=potential_elements,
@@ -63,9 +63,6 @@ def write_LammpsInput(
 
     return path
 
-from pyiron_lammps import parse_lammps_output_files
-from ase.io.lammpsdata import read_lammps_data
-from ase.io import read
 @pwf.as_function_node("lammps_output")
 def parse_LammpsOutput(working_directory: str,
                        potential_elements: List[str],
@@ -78,10 +75,15 @@ def parse_LammpsOutput(working_directory: str,
                        _parser_fn = None,
                        _parser_fn_kwargs = None):
     from pyiron_workflow_atomistics.dataclass_storage import EngineOutput
+    from pyiron_lammps import parse_lammps_output_files
+    from ase.io.lammpsdata import read_lammps_data
+    from pyiron_workflow_lammps.generic import isLineInFile
+    import warnings
+    warnings.filterwarnings("ignore")
     if _parser_fn is None:
         try:
             lammps_EngineOutput = read_lammps_data(os.path.join(working_directory, lammps_structure_filepath))
-            print("Successfully read LAMMPS structure file")
+            logger.info("parse_LammpsOutput: Successfully read LAMMPS structure file")
         except Exception as e:
             raise Exception(f"Error parsing LAMMPS output: {e}, you must provide a parser function (_parser_fn) and kwargs (_parser_fn_kwargs) if you want to use a custom parser.")
         
@@ -108,7 +110,6 @@ def parse_LammpsOutput(working_directory: str,
                                     )
             atoms_list.append(atoms)
         lammps_EngineOutput.final_structure = atoms_list[-1]
-        from pyiron_workflow_lammps.generic import isLineInFile
         if isLineInFile.node_function(filepath = os.path.join(working_directory, log_lammps_file_name),
                                     line = log_lammps_convergence_printout,
                                     exact_match = False):
@@ -129,7 +130,7 @@ def parse_LammpsOutput(working_directory: str,
         lammps_EngineOutput.n_ionic_steps = pyiron_lammps_output["generic"]["steps"]
     else:
         try:
-            lammps_EngineOutput = _parser_fn(**_parser_fn_kwargs)
+            lammps_EngineOutput = _parser_fn(**_parser_fn_kwargs)          
         except Exception as e:
             raise Exception(f"Error parsing LAMMPS output: {e}, you must provide a parser function (_parser_fn) and kwargs (_parser_fn_kwargs) if you want to use a custom parser.")
             
@@ -141,10 +142,10 @@ def get_structure_species_lists(lammps_data_filepath = "lammps.data",
     Prompt for a LAMMPS data file path, parse its Masses section,
     and return a dict mapping atom-type indices to element symbols.
     """
-    species_map = get_species_map(lammps_data_filepath)
     from pymatgen.io.lammps.outputs import parse_lammps_dumps
+    species_map = get_species_map(lammps_data_filepath)
     species_lists = []
-    print(f"Get structure species lists operating in {lammps_dump_filepath}")
+    logger.info(f"Get structure species lists operating in {lammps_dump_filepath}")
     for dump in parse_lammps_dumps(lammps_dump_filepath):
         species_lists.append([species_map[idx] for idx in dump.data.type])
     return species_lists
@@ -168,7 +169,7 @@ def get_species_map(lammps_data_filepath = "lammps.data"):
             parts = stripped.split("#", 1)
             # first token is "<index> <mass>"
             idx = int(parts[0].split()[0])
-            # if there’s a comment like "(Fe)", strip parentheses
+            # if there's a comment like "(Fe)", strip parentheses
             symbol = parts[1].strip().strip("()") if len(parts) > 1 else None
             species_map[idx] = symbol
     return species_map
@@ -185,6 +186,7 @@ def arrays_to_ase_atoms(
 
     Raises KeyError if any type in `indices` isn't a key in `species_map`.
     """
+    
     # last frame
     cell  = cells
     pos   = positions
@@ -230,6 +232,8 @@ def lammps_job(
     Returns:
         Parsed LAMMPS output (whatever the parser returns).
     """
+    from pyiron_workflow_lammps.generic import create_WorkingDirectory, shell
+    
     # 1) Create the directory
     self.working_dir = create_WorkingDirectory(working_directory=working_directory)
 
@@ -294,7 +298,6 @@ def lammps_calculator_fn(
     _lammps_parser_function: Callable[..., Any] | None = None,
     _lammps_parser_args: dict[str, Any] = {},
 ):
-    print(potential_elements)
     output = lammps_job(
         working_directory=working_directory,
         structure=structure,
@@ -308,4 +311,4 @@ def lammps_calculator_fn(
         _lammps_parser_function=_lammps_parser_function,
         _lammps_parser_args=_lammps_parser_args
     )()
-    return output
+    return output["lammps_output"]

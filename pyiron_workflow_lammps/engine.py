@@ -50,19 +50,25 @@ class LammpsEngine(Engine):
     input_script_thermo_format: str = "%20.15g"
     input_script_thermo_every: int = 10
     input_script_min_style: str = "cg"
-
+    input_script_relax_pressure: float = 1e4
+    input_script_relax_vmax: float = 0.001
+    input_script_relax_type: Literal["iso", "aniso", "tri"] = "iso"
     def get_lammps_element_order(self, atoms: Atoms) -> List[str]:
         return list(dict.fromkeys(atoms.get_chemical_symbols()))
 
-    def __post_init__(self):
+    def toggle_mode(self):
+        #print(f"EngineInput type: {type(self.EngineInput)}")
         # Determine simulation mode
-        if hasattr(self.EngineInput, 'energy_convergence_tolerance'):
+        if isinstance(self.EngineInput, CalcInputMinimize):
             self.mode = 'minimize'
-        elif hasattr(self.EngineInput, 'thermostat'):
+        elif isinstance(self.EngineInput, CalcInputMD):
             self.mode = 'md'
-        else:
+        elif isinstance(self.EngineInput, CalcInputStatic):
             self.mode = 'static'
-
+        else:
+            raise TypeError(f"Unsupported EngineInput type: {type(self.EngineInput)}, or you must specify the mode manually")
+        #print("mode set to ", self.mode)
+        
     def _build_script(self, structure: Atoms) -> str:
         # Boilerplate header
         self.potential_elements = self.get_lammps_element_order(structure)
@@ -94,7 +100,8 @@ class LammpsEngine(Engine):
             f"thermo {self.input_script_thermo_every}",
             ""
         ]
-
+        self.toggle_mode()
+        print("current mode ", self.mode)
         # Mode-specific sections
         if self.mode == 'static':
             lines += [
@@ -107,6 +114,10 @@ class LammpsEngine(Engine):
             force_convergence_tolerance = self.EngineInput.force_convergence_tolerance
             max_iterations = self.EngineInput.max_iterations
             max_evaluations = self.EngineInput.max_evaluations
+            if self.EngineInput.relax_cell:
+                lines.append(
+                    f"fix 1 all box/relax {self.input_script_relax_type} {self.input_script_relax_pressure:.6f} vmax {self.input_script_relax_vmax}"
+                )
             lines += [
                 f"min_style {self.input_script_min_style}",
                 f"minimize {energy_convergence_tolerance} {force_convergence_tolerance} {max_iterations} {max_evaluations}"
@@ -173,7 +184,7 @@ class LammpsEngine(Engine):
             lines.append(f"timestep {md.time_step}")
             lines.append(f"thermo {md.n_print}")
             lines.append(f"run {md.n_ionic_steps}")
-
+            #print(lines)
         else:
             raise ValueError(f"Unknown mode: {self.mode}")
 
