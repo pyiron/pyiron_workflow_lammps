@@ -8,7 +8,7 @@ dependencies:
 - sphinx-rtd-theme
 - versioneer
 - setuptools >=68
-- python =3.12
+- python >=3.12
 - pip
 - numpy >=1.26
 - pandas >=2.0
