@@ -1,5 +1,22 @@
 channels:
 - conda-forge
 dependencies:
-- numpy =2.3.1
 - setuptools >=68
+- python =3.12
+- pip
+- numpy >=1.26
+- pandas >=2.0
+- ase >=3.22
+- pymatgen >=2024.6
+- pyiron_workflow >=0.1.0
+- pyiron_lammps
+- pytest >=7
+- pytest-cov >=4
+- black >=24
+- isort >=5
+- ruff >=0.5
+- h5py =3.14.0
+- pysqa =0.3.0
+- pip:
+  - pyiron_snippets>=0.2.0
+  - -e .[dev]
