@@ -4,7 +4,7 @@ import os
 import shutil
 from unittest.mock import patch, MagicMock, mock_open
 import numpy as np
-from ase import Atoms
+from ase import Atoms, Atom
 from ase.build import bulk
 
 from pyiron_workflow_atomistics.dataclass_storage import (
@@ -84,13 +84,13 @@ class TestLammpsEngine(unittest.TestCase):
         
         # Multiple elements
         multi_structure = bulk('Fe', 'bcc', a=2.87)
-        multi_structure.append('C', position=[1.0, 1.0, 1.0])
+        multi_structure.append(Atom('C', (1.0, 1.0, 1.0)))
         elements = engine.get_lammps_element_order(multi_structure)
         self.assertEqual(elements, ['Fe', 'C'])
         
         # Preserve order
         multi_structure = bulk('C', 'diamond', a=3.57)
-        multi_structure.append('Fe', position=[1.0, 1.0, 1.0])
+        multi_structure.append(Atom('Fe', (1.0, 1.0, 1.0)))
         elements = engine.get_lammps_element_order(multi_structure)
         self.assertEqual(elements, ['C', 'Fe'])
         
@@ -384,8 +384,8 @@ class TestLammpsEngine(unittest.TestCase):
         """Test writing input file to disk."""
         engine_input = CalcInputStatic()
         engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
-        
-        filepath = engine.write_input_file()
+        structure = bulk('Fe', 'bcc', a=2.87)
+        filepath = engine.write_input_file(structure)
         
         expected_path = os.path.join(self.temp_dir, "in.lmp")
         self.assertEqual(filepath, expected_path)
@@ -398,12 +398,12 @@ class TestLammpsEngine(unittest.TestCase):
         self.assertIn("units metal", content)
         self.assertIn("minimize 0 0 0 0", content)
         
-    def test_calculate_fn(self):
+    def test_get_calculate_fn(self):
         """Test calculation function setup."""
         engine_input = CalcInputStatic()
         engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
-        
-        calc_fn, calc_kwargs = engine.calculate_fn(self.structure)
+        structure = bulk('Fe', 'bcc', a=2.87)
+        calc_fn, calc_kwargs = engine.get_calculate_fn(structure)
         
         self.assertIsNotNone(calc_fn)
         self.assertIsNotNone(calc_kwargs)
@@ -415,8 +415,8 @@ class TestLammpsEngine(unittest.TestCase):
         """Test parse function setup."""
         engine_input = CalcInputStatic()
         engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
-        
-        parse_fn = engine.parse_fn(self.structure)
+    
+        parse_fn = engine.get_parse_fn()
         
         self.assertIsNotNone(parse_fn)
         
@@ -430,7 +430,7 @@ class TestLammpsEngine(unittest.TestCase):
         engine.calc_fn = custom_fn
         engine.calc_fn_kwargs = custom_kwargs
         
-        calc_fn, calc_kwargs = engine.calculate_fn(self.structure)
+        calc_fn, calc_kwargs = engine.get_calculate_fn(self.structure)
         
         self.assertEqual(calc_fn, custom_fn)
         self.assertEqual(calc_kwargs, custom_kwargs)
@@ -442,18 +442,19 @@ class TestLammpsEngine(unittest.TestCase):
         
         custom_fn = lambda x: x
         engine.parse_fn = custom_fn
-        
-        parse_fn = engine.parse_fn(self.structure)
+        engine.parse_fn_kwargs = {'test': 'value'}
+        parse_fn, parse_kwargs = engine.get_parse_fn()
         
         self.assertEqual(parse_fn, custom_fn)
+        self.assertEqual(parse_kwargs, {'test': 'value'})
         
     def test_boundary_string(self):
         """Test boundary setting with string input."""
         engine_input = CalcInputStatic()
         engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
         engine.input_script_boundary = "p p p"
-        
-        script = engine._build_script(self.structure)
+        structure = bulk('Fe', 'bcc', a=2.87)
+        script = engine._build_script(structure)
         
         self.assertIn("boundary p p p", script)
         
@@ -462,8 +463,8 @@ class TestLammpsEngine(unittest.TestCase):
         engine_input = CalcInputStatic()
         engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
         engine.input_script_boundary = ("p", "p", "f")
-        
-        script = engine._build_script(self.structure)
+        structure = bulk('Fe', 'bcc', a=2.87)
+        script = engine._build_script(structure)
         
         self.assertIn("boundary p p f", script)
 

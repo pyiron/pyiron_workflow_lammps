@@ -4,7 +4,7 @@ from ase import Atoms
 import os
 import textwrap
 from pyiron_workflow_atomistics.dataclass_storage import Engine, CalcInputStatic, CalcInputMinimize, CalcInputMD
-
+import warnings
 @dataclass
 class LammpsEngine(Engine):
     """
@@ -53,21 +53,52 @@ class LammpsEngine(Engine):
     input_script_relax_pressure: float = 1e4
     input_script_relax_vmax: float = 0.001
     input_script_relax_type: Literal["iso", "aniso", "tri"] = "iso"
+    
+    def __post_init__(self):
+        # Ensure the attribute exists and is consistent with EngineInput
+        self.toggle_mode()
+        # Normalize kwargs dicts
+        if self.calc_fn_kwargs is None:
+            self.calc_fn_kwargs = {}
+        if self.parse_fn_kwargs is None:
+            self.parse_fn_kwargs = {}
+    
     def get_lammps_element_order(self, atoms: Atoms) -> List[str]:
         return list(dict.fromkeys(atoms.get_chemical_symbols()))
 
+
+
     def toggle_mode(self):
-        #print(f"EngineInput type: {type(self.EngineInput)}")
-        # Determine simulation mode
+        # Infer mode from EngineInput type
         if isinstance(self.EngineInput, CalcInputMinimize):
-            self.mode = 'minimize'
+            inferred = "minimize"
         elif isinstance(self.EngineInput, CalcInputMD):
-            self.mode = 'md'
+            inferred = "md"
         elif isinstance(self.EngineInput, CalcInputStatic):
-            self.mode = 'static'
+            inferred = "static"
         else:
-            raise TypeError(f"Unsupported EngineInput type: {type(self.EngineInput)}, or you must specify the mode manually")
-        #print("mode set to ", self.mode)
+            raise TypeError(f"Unsupported EngineInput type: {type(self.EngineInput)}")
+
+        # If mode not present (or explicitly None), assign it
+        if not hasattr(self, "mode") or getattr(self, "mode", None) is None:
+            self.mode = inferred
+            return self.mode
+
+        # mode already present -> warn and do NOT overwrite
+        current = self.mode
+        if current != inferred:
+            warnings.warn(
+                f"'mode' already set to '{current}', but EngineInput implies '{inferred}'. "
+                "Keeping existing 'mode' (not overwriting). Ensure they agree.",
+                RuntimeWarning,
+            )
+        else:
+            warnings.warn(
+                f"'mode' already set to '{current}' and also implied by EngineInput; no change.",
+                RuntimeWarning,
+            )
+        return current
+
         
     def _build_script(self, structure: Atoms) -> str:
         # Boilerplate header
@@ -190,18 +221,18 @@ class LammpsEngine(Engine):
 
         return textwrap.dedent("\n".join(lines))
 
-    def write_input_file(self) -> str:
+    def write_input_file(self, structure: Atoms) -> str:
         """
         Write the built LAMMPS script to `working_directory`/`input_filename`.
         Returns the path to the written file.
         """
-        script = self._build_script(self.structure)
+        script = self._build_script(structure)
         path = os.path.join(self.working_directory, self.input_filename)
         with open(path, 'w') as f:
             f.write(script)
         return path
 
-    def calculate_fn(self, structure: Atoms) -> Callable:
+    def get_calculate_fn(self, structure: Atoms) -> Tuple[Callable, Dict[str, Any]]:
         if self.calc_fn is None:
             from pyiron_workflow_lammps.lammps import lammps_calculator_fn
             self.potential_elements = self.get_lammps_element_order(structure)
@@ -214,16 +245,14 @@ class LammpsEngine(Engine):
                 "command": self.command,
                 "lammps_log_filepath": self.lammps_log_filepath,
                 "units": self.input_script_units,
-                "lammps_log_convergence_printout": self.lammps_log_convergence_printout
+                "lammps_log_convergence_printout": self.lammps_log_convergence_printout,
             }
         return self.calc_fn, self.calc_fn_kwargs
 
-    def parse_fn(self, structure: Atoms) -> Callable:
+    def get_parse_fn(self) -> Callable:
         if self.parse_fn is None:
             from pyiron_workflow_lammps.lammps import parse_LammpsOutput
             self.parse_fn = parse_LammpsOutput
-        return self.parse_fn
-
-
+        return self.parse_fn, self.parse_fn_kwargs
 
 
