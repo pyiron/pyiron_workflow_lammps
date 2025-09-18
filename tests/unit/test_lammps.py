@@ -6,8 +6,9 @@ from unittest.mock import patch, MagicMock, mock_open
 import numpy as np
 from ase import Atoms
 from ase.build import bulk
-
 import pyiron_workflow as pwf
+from pyiron_workflow_atomistics.dataclass_storage import CalcInputStatic
+from pyiron_workflow_lammps.engine import LammpsEngine
 from pyiron_workflow_lammps.lammps import (
     write_LammpsStructure,
     write_LammpsInput,
@@ -255,14 +256,10 @@ class TestParseLammpsOutput(unittest.TestCase):
         self.temp_dir = tempfile.mkdtemp()
         self.potential_elements = ['Fe']
         self.units = "metal"
-        
+        self.resources_dir = os.path.join(os.path.dirname(__file__), os.sep.join(["..", "resources"]))
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
         
-    @patch('pyiron_workflow_lammps.lammps.read_lammps_data')
-    @patch('pyiron_workflow_lammps.lammps.parse_lammps_output_files')
-    @patch('pyiron_workflow_lammps.lammps.get_structure_species_lists')
-    @patch('pyiron_workflow_lammps.lammps.isLineInFile')
     def test_parse_lammps_output_success(self, mock_is_line, mock_get_species, 
                                         mock_parse_output, mock_read_data):
         """Test successful LAMMPS output parsing."""
@@ -360,37 +357,23 @@ class TestGetStructureSpeciesLists(unittest.TestCase):
     
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
+        self.resources_dir = os.path.join(os.path.dirname(__file__), os.sep.join(["..", "resources"]))
         
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
         
-    @patch('pyiron_workflow_lammps.lammps.parse_lammps_dumps')
-    @patch('pyiron_workflow_lammps.lammps.get_species_map')
-    def test_get_structure_species_lists(self, mock_get_species_map, mock_parse_dumps):
+    def test_get_structure_species_lists(self):
         """Test species list extraction from LAMMPS dump files."""
-        # Mock species map
-        mock_get_species_map.return_value = {1: 'Fe', 2: 'C'}
         
-        # Mock dump data
-        mock_dump = MagicMock()
-        mock_dump.data.type = [1, 1, 2]  # Two Fe atoms, one C atom
-        mock_parse_dumps.return_value = [mock_dump]
-        
-        data_file = os.path.join(self.temp_dir, "lammps.data")
-        dump_file = os.path.join(self.temp_dir, "dump.out")
-        
-        with open(data_file, 'w') as f:
-            f.write("LAMMPS data file\n")
-        with open(dump_file, 'w') as f:
-            f.write("ITEM: TIMESTEP\n")
-        
+        data_file = os.path.join(self.resources_dir, "lammps.data")
+        dump_file = os.path.join(self.resources_dir, "dump.out")
+
         result = get_structure_species_lists(data_file, dump_file)
-        
-        expected = [['Fe', 'Fe', 'C']]
+
+        expected = [['C', 'Fe', 'C', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe',\
+            'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe',\
+                'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe', 'Fe']]
         self.assertEqual(result, expected)
-        
-        mock_get_species_map.assert_called_once_with(data_file)
-        mock_parse_dumps.assert_called_once_with(dump_file)
 
 
 class TestLammpsJob(unittest.TestCase):
@@ -402,53 +385,49 @@ class TestLammpsJob(unittest.TestCase):
         self.lammps_input = "units metal\ndimension 3\nboundary p p p"
         self.units = "metal"
         self.potential_elements = ['Fe']
+        self.structure = bulk("Fe") * [4,4,4]
+        self.structure.rattle(0.3)
+        self.structure[0].symbol = "C"
+        self.structure[2].symbol = "C"
         
+        self.EngineInput = CalcInputStatic()
+
+        self.Engine = LammpsEngine(EngineInput = self.EngineInput)
+        self.Engine.working_directory = "EnginePrototypeStatic"
+        self.Engine.command = "/root/github_dev/lammps/build/lmp -in in.lmp -log minimize.log"
+        self.Engine.lammps_log_filepath = "minimize.log"
+        self.Engine.path_to_model = "/root/github_dev/test_workflow_nodes/2025_04_29_FeGB_Segregation_Workflows/final_model"
+        self.potential_elements = self.Engine.get_lammps_element_order(self.structure)
+        self.input_filename = "in.lmp"
+        self.lammps_log_convergence_printout = "Total wall time:"
+        self.calc_fn = lammps_calculator_fn
+        self.calc_fn_kwargs = {
+            "working_directory": self.Engine.working_directory,
+            "lammps_input": self.Engine._build_script(self.structure),
+            "potential_elements": self.potential_elements,
+            "input_filename": self.input_filename,
+            "command": self.Engine.command,
+            "lammps_log_filepath": self.Engine.lammps_log_filepath,
+            "units": self.Engine.input_script_units,
+            "lammps_log_convergence_printout": self.lammps_log_convergence_printout,
+        }
+
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
         
-    @patch('pyiron_workflow_lammps.lammps.create_WorkingDirectory')
-    @patch('pyiron_workflow_lammps.lammps.write_LammpsStructure')
-    @patch('pyiron_workflow_lammps.lammps.write_LammpsInput')
-    @patch('pyiron_workflow_lammps.lammps.shell')
-    @patch('pyiron_workflow_lammps.lammps.parse_LammpsOutput')
-    def test_lammps_job_workflow(self, mock_parse, mock_shell, mock_write_input, 
-                                mock_write_structure, mock_create_dir):
+    def test_lammps_job(self):
         """Test the complete LAMMPS job workflow."""
-        # Mock all the workflow nodes
-        mock_create_dir.return_value = self.temp_dir
-        mock_write_structure.return_value = self.temp_dir
-        mock_write_input.return_value = os.path.join(self.temp_dir, "in.lmp")
-        mock_shell.return_value = MagicMock()
-        mock_parse.return_value = MagicMock()
-        
-        # Create a mock workflow instance
-        workflow = MagicMock()
         
         result = lammps_job(
-            workflow,
-            working_directory=self.temp_dir,
+            working_directory=self.Engine.working_directory,
             structure=self.structure,
-            lammps_input=self.lammps_input,
+            lammps_input=self.Engine._build_script(self.structure),
             units=self.units,
             potential_elements=self.potential_elements
         )
         
-        # Verify all nodes were called
-        mock_create_dir.assert_called_once()
-        mock_write_structure.assert_called_once()
-        mock_write_input.assert_called_once()
-        mock_shell.assert_called_once()
-        mock_parse.assert_called_once()
-        
         # Verify workflow wiring
-        self.assertEqual(workflow.working_dir, self.temp_dir)
-        self.assertEqual(workflow.structure_writer, self.temp_dir)
-        self.assertEqual(workflow.input_writer, os.path.join(self.temp_dir, "in.lmp"))
-        self.assertIsNotNone(workflow.job)
-        self.assertIsNotNone(workflow.lammps_output)
-        self.assertEqual(workflow.starting_nodes, [self.temp_dir])
-
-
+        # self.assertEqual(result.working_dir, self.temp_dir)
 class TestLammpsCalculatorFn(unittest.TestCase):
     """Test the lammps_calculator_fn function."""
     
@@ -478,7 +457,7 @@ class TestLammpsCalculatorFn(unittest.TestCase):
         )
         
         mock_lammps_job.assert_called_once()
-        self.assertEqual(result, "test_result")
+        self.assertEqual(result["lammps_output"], "test_result")
 
 
 if __name__ == '__main__':

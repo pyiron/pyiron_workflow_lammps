@@ -152,7 +152,7 @@ class TestShell(unittest.TestCase):
         mock_process.returncode = 0
         mock_run.return_value = mock_process
         
-        result = shell("echo test", working_directory=self.temp_dir)
+        result = shell("echo test", working_directory=self.temp_dir).run()
         
         self.assertIsInstance(result, ShellOutput)
         self.assertEqual(result.stdout, "test output")
@@ -176,7 +176,7 @@ class TestShell(unittest.TestCase):
         
         env_vars = {"TEST_VAR": "test_value", "ANOTHER_VAR": "another_value"}
         
-        result = shell("echo test", working_directory=self.temp_dir, environment=env_vars)
+        result = shell("echo test", working_directory=self.temp_dir, environment=env_vars).run()
         
         mock_run.assert_called_once()
         call_args = mock_run.call_args
@@ -194,7 +194,7 @@ class TestShell(unittest.TestCase):
         
         arguments = ["arg1", "arg2", "arg3"]
         
-        result = shell("test_command", working_directory=self.temp_dir, arguments=arguments)
+        result = shell("test_command", working_directory=self.temp_dir, arguments=arguments).run()
         
         mock_run.assert_called_once()
         call_args = mock_run.call_args
@@ -209,7 +209,7 @@ class TestShell(unittest.TestCase):
         mock_process.returncode = 1
         mock_run.return_value = mock_process
         
-        result = shell("failing_command", working_directory=self.temp_dir)
+        result = shell("failing_command", working_directory=self.temp_dir).run()
         
         self.assertEqual(result.return_code, 1)
         self.assertEqual(result.stderr, "error message")
@@ -304,7 +304,7 @@ class TestCreateWorkingDirectory(unittest.TestCase):
         """Test creating a new working directory."""
         new_dir = os.path.join(self.temp_dir, "new_working_dir")
         
-        result = create_WorkingDirectory(new_dir)
+        result = create_WorkingDirectory(new_dir).run()
         
         self.assertEqual(result, new_dir)
         self.assertTrue(os.path.exists(new_dir))
@@ -315,7 +315,7 @@ class TestCreateWorkingDirectory(unittest.TestCase):
         existing_dir = os.path.join(self.temp_dir, "existing_dir")
         os.makedirs(existing_dir)
         
-        result = create_WorkingDirectory(existing_dir)
+        result = create_WorkingDirectory(existing_dir).run()
         
         self.assertEqual(result, existing_dir)
         self.assertTrue(os.path.exists(existing_dir))
@@ -325,7 +325,7 @@ class TestCreateWorkingDirectory(unittest.TestCase):
         existing_dir = os.path.join(self.temp_dir, "existing_dir")
         os.makedirs(existing_dir)
         
-        result = create_WorkingDirectory(existing_dir, quiet=True)
+        result = create_WorkingDirectory(existing_dir, quiet=True).run()
         
         self.assertEqual(result, existing_dir)
         self.assertTrue(os.path.exists(existing_dir))
@@ -358,7 +358,7 @@ class TestDeleteFilesRecursively(unittest.TestCase):
             
         files_to_delete = ["file1.txt", "file3.txt"]
         
-        result = delete_files_recursively(self.temp_dir, files_to_delete)
+        result = delete_files_recursively(self.temp_dir, files_to_delete).run()
         
         self.assertEqual(result, self.temp_dir)
         self.assertFalse(os.path.exists(test_file1))
@@ -369,7 +369,7 @@ class TestDeleteFilesRecursively(unittest.TestCase):
         """Test behavior with invalid directory."""
         invalid_dir = os.path.join(self.temp_dir, "nonexistent")
         
-        result = delete_files_recursively(invalid_dir, ["test.txt"])
+        result = delete_files_recursively(invalid_dir, ["test.txt"]).run()
         
         self.assertEqual(result, invalid_dir)
         
@@ -379,7 +379,7 @@ class TestDeleteFilesRecursively(unittest.TestCase):
         with open(test_file, 'w') as f:
             f.write("content")
             
-        result = delete_files_recursively(self.temp_dir, ["delete_this.txt"])
+        result = delete_files_recursively(self.temp_dir, ["delete_this.txt"]).run() 
         
         self.assertEqual(result, self.temp_dir)
         self.assertTrue(os.path.exists(test_file))  # Should still exist
@@ -405,7 +405,7 @@ class TestCompressDirectory(unittest.TestCase):
         with open(test_file2, 'w') as f:
             f.write("content2")
             
-        result = compress_directory(self.temp_dir, actually_compress=True)
+        result = compress_directory(self.temp_dir, actually_compress=True).run()
         
         self.assertIsNotNone(result)
         self.assertTrue(result.endswith(".tar.gz"))
@@ -417,7 +417,7 @@ class TestCompressDirectory(unittest.TestCase):
         with open(test_file, 'w') as f:
             f.write("content")
             
-        result = compress_directory(self.temp_dir, inside_dir=True, actually_compress=True)
+        result = compress_directory(self.temp_dir, inside_dir=True, actually_compress=True).run()
         
         expected_path = os.path.join(self.temp_dir, os.path.basename(self.temp_dir) + ".tar.gz")
         self.assertEqual(result, expected_path)
@@ -428,7 +428,7 @@ class TestCompressDirectory(unittest.TestCase):
         with open(test_file, 'w') as f:
             f.write("content")
             
-        result = compress_directory(self.temp_dir, inside_dir=False, actually_compress=True)
+        result = compress_directory(self.temp_dir, inside_dir=False, actually_compress=True).run()
         
         expected_path = os.path.join(os.path.dirname(self.temp_dir), os.path.basename(self.temp_dir) + ".tar.gz")
         self.assertEqual(result, expected_path)
@@ -447,7 +447,7 @@ class TestCompressDirectory(unittest.TestCase):
             self.temp_dir, 
             exclude_files=["exclude.txt"],
             actually_compress=True
-        )
+        ).run()
         
         self.assertIsNotNone(result)
         self.assertTrue(os.path.exists(result))
@@ -466,7 +466,7 @@ class TestCompressDirectory(unittest.TestCase):
             self.temp_dir, 
             exclude_file_patterns=["*.log"],
             actually_compress=True
-        )
+        ).run()
         
         self.assertIsNotNone(result)
         self.assertTrue(os.path.exists(result))
@@ -477,7 +477,7 @@ class TestCompressDirectory(unittest.TestCase):
         with open(test_file, 'w') as f:
             f.write("content")
             
-        result = compress_directory(self.temp_dir, actually_compress=False)
+        result = compress_directory(self.temp_dir, actually_compress=False).run()
         
         self.assertIsNone(result)
 
@@ -537,7 +537,7 @@ class TestRemoveDir(unittest.TestCase):
         with open(test_file, 'w') as f:
             f.write("content")
             
-        result = remove_dir(self.temp_dir, actually_remove=True)
+        result = remove_dir(self.temp_dir, actually_remove=True).run()
         
         self.assertEqual(result, self.temp_dir)
         self.assertFalse(os.path.exists(self.temp_dir))
@@ -548,7 +548,7 @@ class TestRemoveDir(unittest.TestCase):
         with open(test_file, 'w') as f:
             f.write("content")
             
-        result = remove_dir(self.temp_dir, actually_remove=False)
+        result = remove_dir(self.temp_dir, actually_remove=False).run()
         
         self.assertEqual(result, self.temp_dir)
         self.assertTrue(os.path.exists(self.temp_dir))  # Should still exist

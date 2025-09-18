@@ -64,14 +64,17 @@ class TestVersion(unittest.TestCase):
     def test_run_command_success(self, mock_popen):
         """Test run_command with successful execution."""
         mock_process = MagicMock()
-        mock_process.communicate.return_value = ("test output", "test error")
+        # return BYTES so .decode() in run_command works
+        mock_process.communicate.return_value = (b"test output", b"test error")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
-        
-        output, return_code = run_command(["echo", "test"])
-        
+
+        # your function expects (commands, args)
+        output, return_code = run_command(["echo"], ["test"])
+
         self.assertEqual(output, "test output")
         self.assertEqual(return_code, 0)
+        mock_popen.assert_called_once()
         
     @patch('subprocess.Popen')
     def test_run_command_failure(self, mock_popen):
