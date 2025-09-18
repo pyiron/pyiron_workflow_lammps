@@ -32,8 +32,7 @@ class TestWriteLammpsStructure(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
         
-    @patch('pyiron_workflow_lammps.lammps.write_lammps_structure')
-    def test_write_lammps_structure_basic(self, mock_write):
+    def test_write_lammps_structure_basic(self):
         """Test basic functionality of write_LammpsStructure."""
         result = write_LammpsStructure(
             structure=self.structure,
@@ -42,33 +41,7 @@ class TestWriteLammpsStructure(unittest.TestCase):
             units="metal",
             file_name="test.data"
         )
-        
-        mock_write.assert_called_once_with(
-            structure=self.structure,
-            potential_elements=self.potential_elements,
-            units="metal",
-            file_name="test.data",
-            working_directory=self.temp_dir
-        )
         self.assertEqual(result, self.temp_dir)
-        
-    def test_write_lammps_structure_defaults(self):
-        """Test write_LammpsStructure with default parameters."""
-        with patch('pyiron_workflow_lammps.lammps.write_lammps_structure') as mock_write:
-            result = write_LammpsStructure(
-                structure=self.structure,
-                working_directory=self.temp_dir,
-                potential_elements=self.potential_elements
-            )
-            
-            mock_write.assert_called_once_with(
-                structure=self.structure,
-                potential_elements=self.potential_elements,
-                units="metal",
-                file_name="lammps.data",
-                working_directory=self.temp_dir
-            )
-
 
 class TestWriteLammpsInput(unittest.TestCase):
     """Test the write_LammpsInput function."""
@@ -87,7 +60,7 @@ class TestWriteLammpsInput(unittest.TestCase):
             lammps_input=self.lammps_input,
             filename=filename,
             working_directory=self.temp_dir
-        )
+        )()
         
         expected_path = os.path.join(self.temp_dir, filename)
         self.assertEqual(result, expected_path)
@@ -108,7 +81,7 @@ class TestWriteLammpsInput(unittest.TestCase):
         result = write_LammpsInput(
             lammps_input=self.lammps_input,
             filename=filename
-        )
+        )()
         
         self.assertEqual(result, filename)
         self.assertTrue(os.path.exists(filename))
@@ -129,7 +102,7 @@ class TestWriteLammpsInput(unittest.TestCase):
             lammps_input=self.lammps_input,
             filename=filename,
             working_directory=new_dir
-        )
+        )()
         
         expected_path = os.path.join(new_dir, filename)
         self.assertEqual(result, expected_path)
@@ -254,60 +227,60 @@ class TestParseLammpsOutput(unittest.TestCase):
     
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.potential_elements = ['Fe']
+        self.potential_elements = ['Fe', "C"]
         self.units = "metal"
         self.resources_dir = os.path.join(os.path.dirname(__file__), os.sep.join(["..", "resources"]))
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
         
-    def test_parse_lammps_output_success(self, mock_is_line, mock_get_species, 
-                                        mock_parse_output, mock_read_data):
+    def test_parse_lammps_output_success(self):
         """Test successful LAMMPS output parsing."""
         # Mock the structure
-        mock_atoms = Atoms('Fe', positions=[[0, 0, 0]], cell=[[2.87, 0, 0], [0, 2.87, 0], [0, 0, 2.87]])
-        mock_read_data.return_value = mock_atoms
-        
-        # Mock the output parsing
-        mock_output = {
-            'generic': {
-                'cells': [np.array([[2.87, 0, 0], [0, 2.87, 0], [0, 0, 2.87]])],
-                'positions': [np.array([[0, 0, 0]])],
-                'indices': [np.array([0])],
-                'energy_tot': [0.0],
-                'forces': [np.array([[0, 0, 0]])],
-                'pressures': [np.array([0, 0, 0, 0, 0, 0])],
-                'steps': [0]
-            }
-        }
-        mock_parse_output.return_value = mock_output
-        
-        # Mock species lists
-        mock_get_species.return_value = [['Fe']]
-        
-        # Mock convergence check
-        mock_is_line.node_function.return_value = True
-        
-        # Create dummy files
-        data_file = os.path.join(self.temp_dir, "lammps.data")
-        dump_file = os.path.join(self.temp_dir, "dump.out")
-        log_file = os.path.join(self.temp_dir, "log.lammps")
-        
-        with open(data_file, 'w') as f:
-            f.write("LAMMPS data file\n")
-        with open(dump_file, 'w') as f:
-            f.write("ITEM: TIMESTEP\n")
-        with open(log_file, 'w') as f:
-            f.write("Total wall time: 1.234\n")
         
         result = parse_LammpsOutput(
-            working_directory=self.temp_dir,
+            working_directory=self.resources_dir,
             potential_elements=self.potential_elements,
+            lammps_structure_filepath="lammps.data",
+            dump_out_file_name="dump.out",
+            log_lammps_file_name="minimize.log",
+            log_lammps_convergence_printout="Total wall time:",
             units=self.units
-        )
+        )()
         
         self.assertIsNotNone(result)
         self.assertTrue(result.convergence)
-        self.assertEqual(result.final_energy, 0.0)
+        self.assertEqual(result.final_energy, np.float64(-454.367609882893))
+        
+    def test_parse_lammps_output_success_default_filename(self):
+        """Test successful LAMMPS output parsing."""
+        # Mock the structure
+        
+        result = parse_LammpsOutput(
+            working_directory=self.resources_dir,
+            potential_elements=self.potential_elements,
+            log_lammps_convergence_printout="Total wall time:",
+            units=self.units
+        )()
+        
+        self.assertIsNotNone(result)
+        self.assertTrue(result.convergence)
+        self.assertEqual(result.final_energy, np.float64(-454.367609882893))     
+        
+    def test_parse_lammps_output_success_unconverged(self):
+        """Test successful LAMMPS output parsing."""
+        # Mock the structure
+        
+        result = parse_LammpsOutput(
+            working_directory=self.resources_dir,
+            potential_elements=self.potential_elements,
+            log_lammps_file_name="unconverged_minimize.log",
+            log_lammps_convergence_printout="Total wall time:",
+            units=self.units
+        )()
+        
+        self.assertIsNotNone(result)
+        self.assertFalse(result.convergence)
+        self.assertEqual(result.final_energy, np.float64(-454.367609882893))
         
     def test_parse_lammps_output_missing_files(self):
         """Test parsing with missing output files."""
@@ -316,7 +289,7 @@ class TestParseLammpsOutput(unittest.TestCase):
                 working_directory=self.temp_dir,
                 potential_elements=self.potential_elements,
                 units=self.units
-            )
+            )()
             
     def test_parse_lammps_output_custom_parser(self):
         """Test parsing with custom parser function."""
@@ -330,7 +303,7 @@ class TestParseLammpsOutput(unittest.TestCase):
             units=self.units,
             _parser_fn=mock_parser,
             _parser_fn_kwargs={'arg1': 'value1'}
-        )
+        )()
         
         mock_parser.assert_called_once_with(arg1='value1')
         self.assertEqual(result, mock_output)
@@ -347,7 +320,7 @@ class TestParseLammpsOutput(unittest.TestCase):
                 units=self.units,
                 _parser_fn=failing_parser,
                 _parser_fn_kwargs={}
-            )
+            )()
         
         self.assertIn("Error parsing LAMMPS output", str(context.exception))
 

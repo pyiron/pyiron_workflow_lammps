@@ -75,7 +75,7 @@ class TestLammpsBenchmark(unittest.TestCase):
                 lammps_input=lammps_input,
                 filename="test.in",
                 working_directory=location
-            )
+            )()
             end_time = time.time()
             
             results[location] = {
@@ -141,7 +141,10 @@ class TestLammpsBenchmark(unittest.TestCase):
             cells = np.array([[2.0, 0.0, 0.0], [0.0, 2.0, 0.0], [0.0, 0.0, 2.0]])
             positions = np.random.rand(size, 3)
             indices = np.random.randint(0, 3, size)  # 3 different atom types
-            species_lists = [['Fe', 'C', 'O'][:3]]  # 3 different elements
+            base_species = ['Fe', 'C', 'O']
+            # Build per-atom species list for the final frame
+            species_per_atom = [base_species[i] for i in indices]
+            species_lists = [species_per_atom]
             
             # Benchmark conversion
             start_time = time.time()

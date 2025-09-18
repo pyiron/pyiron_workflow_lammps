@@ -40,9 +40,9 @@ class TestVersion(unittest.TestCase):
         
         self.assertEqual(config.VCS, "git")
         self.assertEqual(config.style, "pep440-pre")
-        self.assertEqual(config.tag_prefix, "pyiron_module_template-")
-        self.assertEqual(config.parentdir_prefix, "pyiron_module_template")
-        self.assertEqual(config.versionfile_source, "pyiron_module_template/_version.py")
+        self.assertEqual(config.tag_prefix, "pyiron_workflow_lammps-")
+        self.assertEqual(config.parentdir_prefix, "pyiron_workflow_lammps")
+        self.assertEqual(config.versionfile_source, "pyiron_workflow_lammps/_version.py")
         self.assertFalse(config.verbose)
         
     def test_not_this_method_exception(self):
@@ -80,24 +80,25 @@ class TestVersion(unittest.TestCase):
     def test_run_command_failure(self, mock_popen):
         """Test run_command with failed execution."""
         mock_process = MagicMock()
-        mock_process.communicate.return_value = ("", "error message")
+        # return BYTES so .decode() in run_command works
+        mock_process.communicate.return_value = (b"", b"error message")
         mock_process.returncode = 1
         mock_popen.return_value = mock_process
         
-        output, return_code = run_command(["invalid_command"])
+        output, return_code = run_command(["invalid_command"], [])
         
-        self.assertEqual(output, "")
+        self.assertIsNone(output)
         self.assertEqual(return_code, 1)
         
     @patch('subprocess.Popen')
     def test_run_command_with_cwd(self, mock_popen):
         """Test run_command with custom working directory."""
         mock_process = MagicMock()
-        mock_process.communicate.return_value = ("output", "")
+        mock_process.communicate.return_value = (b"output", b"")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
         
-        run_command(["echo", "test"], cwd="/test/directory")
+        run_command(["echo"], ["test"], cwd="/test/directory")
         
         mock_popen.assert_called_once()
         call_args = mock_popen.call_args
@@ -107,12 +108,12 @@ class TestVersion(unittest.TestCase):
     def test_run_command_with_env(self, mock_popen):
         """Test run_command with custom environment."""
         mock_process = MagicMock()
-        mock_process.communicate.return_value = ("output", "")
+        mock_process.communicate.return_value = (b"output", b"")
         mock_process.returncode = 0
         mock_popen.return_value = mock_process
         
         env_vars = {"TEST_VAR": "test_value"}
-        run_command(["echo", "test"], env=env_vars)
+        run_command(["echo"], ["test"], env=env_vars)
         
         mock_popen.assert_called_once()
         call_args = mock_popen.call_args
