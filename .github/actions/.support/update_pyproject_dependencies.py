@@ -115,8 +115,21 @@ def load_yaml(yaml_file: str) -> dict:
 
     yaml_bounds = {}
     for dependency in data["dependencies"]:
-        package, version = split_dependency(dependency, "=", allow_no_version=True)
-        yaml_bounds[package] = version
+        if type(dependency) == dict:
+            print(dependency)
+            if "pip" in dependency.keys():
+                for pip_dependency in dependency["pip"]:
+                    if "==" in pip_dependency:
+                        package, version = split_dependency(pip_dependency, "==", allow_no_version=True)
+                        yaml_bounds[package] = version
+                    # If no "==", discard it as requested
+            else:
+                raise ValueError(f"Expected 'pip' key in dependency but got {dependency}")
+            continue
+        else:
+            package, version = split_dependency(dependency, "=", allow_no_version=True)
+            yaml_bounds[package] = version
+    print(yaml_bounds)
     return yaml_bounds
 
 
