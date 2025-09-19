@@ -11,16 +11,16 @@ name = "pyiron_workflow_lammps"
 description = "A LAMMPS workflow integration package for pyiron"
 readme = "README.md"
 keywords = ["pyiron", "lammps", "workflow", "molecular-dynamics", "materials-science"]
-requires-python = ">=3.11, <3.14"
+requires-python = ">=3.11, <3.13"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Topic :: Scientific/Engineering",
     "License :: OSI Approved :: BSD License",
     "Intended Audience :: Science/Research",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Programming Language :: Python :: 3.13",
 ]
 dependencies = [
     "numpy==1.26.4",
