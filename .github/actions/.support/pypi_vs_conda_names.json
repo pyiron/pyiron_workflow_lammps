@@ -1,0 +1,18 @@
+{
+    "blosc2": "python-blosc2",
+    "graphviz": "python-graphviz",
+    "h5io-browser": "h5io_browser",
+    "matplotlib": "matplotlib-base",
+    "pyiron-atomistics": "pyiron_atomistics",
+    "pyiron-base": "pyiron_base",
+    "pyiron-continuum": "pyiron_continuum",
+    "pyiron-contrib": "pyiron_contrib",
+    "pyiron-experimental": "pyiron_experimental",
+    "pyiron-gpl": "pyiron_gpl",
+    "pyiron-gui": "pyiron_gui",
+    "pyiron-ontology": "pyiron_ontology",
+    "pyiron-potentialfit": "pyiron_potentialfit",
+    "pyiron-workflow": "pyiron_workflow",
+    "tables": "pytables",
+    "landaupkg": "landau"
+  }
