@@ -8,6 +8,7 @@ dependencies:
   - pymatgen =2024.8.8
   - pyiron_workflow =0.14.0
   - pyiron_lammps =0.4.6
+  - pandas =2.2.3
   # If pyiron_snippets isn’t on conda-forge, install via pip below
   - pysqa =0.3.0
   - pip:
