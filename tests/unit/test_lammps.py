@@ -1,23 +1,23 @@
-import unittest
-import tempfile
 import os
 import shutil
-from unittest.mock import patch, MagicMock, mock_open
+import tempfile
+import unittest
+from unittest.mock import MagicMock, patch
+
 import numpy as np
-from ase import Atoms
 from ase.build import bulk
-import pyiron_workflow as pwf
 from pyiron_workflow_atomistics.dataclass_storage import CalcInputStatic
+
 from pyiron_workflow_lammps.engine import LammpsEngine
 from pyiron_workflow_lammps.lammps import (
-    write_LammpsStructure,
-    write_LammpsInput,
-    parse_LammpsOutput,
-    get_structure_species_lists,
-    get_species_map,
     arrays_to_ase_atoms,
-    lammps_job,
+    get_species_map,
+    get_structure_species_lists,
     lammps_calculator_fn,
+    lammps_job,
+    parse_LammpsOutput,
+    write_LammpsInput,
+    write_LammpsStructure,
 )
 
 
@@ -67,7 +67,7 @@ class TestWriteLammpsInput(unittest.TestCase):
         self.assertEqual(result, expected_path)
         self.assertTrue(os.path.exists(expected_path))
 
-        with open(expected_path, "r") as f:
+        with open(expected_path) as f:
             content = f.read()
         self.assertEqual(content, self.lammps_input)
 
@@ -84,7 +84,7 @@ class TestWriteLammpsInput(unittest.TestCase):
         self.assertEqual(result, filename)
         self.assertTrue(os.path.exists(filename))
 
-        with open(filename, "r") as f:
+        with open(filename) as f:
             content = f.read()
         self.assertEqual(content, self.lammps_input)
 

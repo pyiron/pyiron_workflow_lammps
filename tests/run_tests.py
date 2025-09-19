@@ -60,7 +60,7 @@ def run_tests(test_type="all", verbose=False, coverage=False, parallel=False):
     print(f"Running command: {' '.join(cmd)}")
 
     # Run tests
-    result = subprocess.run(cmd, cwd=Path(__file__).parent.parent)
+    result = subprocess.run(cmd, check=False, cwd=Path(__file__).parent.parent)
     return result.returncode
 
 
@@ -104,7 +104,7 @@ def main():
         slow_cmd = ["python", "-m", "pytest", "tests/unit/", "-m", "slow"]
         if args.verbose:
             slow_cmd.append("-v")
-        subprocess.run(slow_cmd)
+        subprocess.run(slow_cmd, check=False)
 
     sys.exit(exit_code)
 

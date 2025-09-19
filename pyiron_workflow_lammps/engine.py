@@ -1,15 +1,17 @@
-from dataclasses import dataclass, field
-from typing import Literal, Union, Optional, Callable, Dict, Any, List, Tuple
-from ase import Atoms
 import os
 import textwrap
-from pyiron_workflow_atomistics.dataclass_storage import (
-    Engine,
-    CalcInputStatic,
-    CalcInputMinimize,
-    CalcInputMD,
-)
 import warnings
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any, Literal
+
+from ase import Atoms
+from pyiron_workflow_atomistics.dataclass_storage import (
+    CalcInputMD,
+    CalcInputMinimize,
+    CalcInputStatic,
+    Engine,
+)
 
 
 @dataclass
@@ -21,24 +23,24 @@ class LammpsEngine(Engine):
     Thermostat and ensemble logic is implemented directly here.
     """
 
-    EngineInput: Union[CalcInputStatic, CalcInputMinimize, CalcInputMD]
+    EngineInput: CalcInputStatic | CalcInputMinimize | CalcInputMD
     mode: Literal["static", "minimize", "md"] = field(init=False)
     working_directory: str = field(default_factory=os.getcwd)
     input_filename: str = "in.lmp"
     command: str = "lmp -in in.lmp -log log.lammps"
     calc_fn: Callable = None
-    calc_fn_kwargs: Dict[str, Any] = None
+    calc_fn_kwargs: dict[str, Any] = None
     parse_fn: Callable = None
-    parse_fn_kwargs: Dict[str, Any] = None
+    parse_fn_kwargs: dict[str, Any] = None
     lammps_log_filepath: str = "log.lammps"
     lammps_log_convergence_printout: str = "Total wall time:"
-    raw_script: Optional[str] = None
-    potential_elements: List[str] = None
+    raw_script: str | None = None
+    potential_elements: list[str] = None
     path_to_model: str = "/path/to/model"
     # Default boilerplate fields for the input script
     input_script_units: str = "metal"
     input_script_dimension: int = 3
-    input_script_boundary: Union[str, Tuple[str, str, str]] = ("p", "p", "p")
+    input_script_boundary: str | tuple[str, str, str] = ("p", "p", "p")
     input_script_atom_style: str = "atomic"
     input_script_read_data_file: str = "lammps.data"
     input_script_pair_style: str = "grace"
@@ -51,7 +53,7 @@ class LammpsEngine(Engine):
         "%20.15g %20.15g %20.15g %20.15g %20.15g "
         '%20.15g %20.15g %20.15g %20.15g %20.15g %20.15g %20.15g"'
     )
-    input_script_thermo_style_fields: Tuple[str, ...] = (
+    input_script_thermo_style_fields: tuple[str, ...] = (
         "step",
         "temp",
         "pe",
@@ -80,7 +82,7 @@ class LammpsEngine(Engine):
         if self.parse_fn_kwargs is None:
             self.parse_fn_kwargs = {}
 
-    def get_lammps_element_order(self, atoms: Atoms) -> List[str]:
+    def get_lammps_element_order(self, atoms: Atoms) -> list[str]:
         return list(dict.fromkeys(atoms.get_chemical_symbols()))
 
     def toggle_mode(self):
@@ -241,7 +243,7 @@ class LammpsEngine(Engine):
             f.write(script)
         return path
 
-    def get_calculate_fn(self, structure: Atoms) -> Tuple[Callable, Dict[str, Any]]:
+    def get_calculate_fn(self, structure: Atoms) -> tuple[Callable, dict[str, Any]]:
         if self.calc_fn is None:
             from pyiron_workflow_lammps.lammps import lammps_calculator_fn
 

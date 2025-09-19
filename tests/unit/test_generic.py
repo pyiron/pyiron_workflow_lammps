@@ -1,23 +1,22 @@
-import unittest
-import tempfile
 import os
 import shutil
-import subprocess
-from unittest.mock import patch, MagicMock, mock_open
+import tempfile
+import unittest
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from pyiron_workflow_lammps.generic import (
-    Storage,
-    ShellOutput,
-    VarType,
     FileObject,
-    shell,
-    isLineInFile,
+    ShellOutput,
+    Storage,
+    VarType,
+    compress_directory,
     create_WorkingDirectory,
     delete_files_recursively,
-    compress_directory,
-    submit_to_slurm,
+    isLineInFile,
     remove_dir,
+    shell,
+    submit_to_slurm,
 )
 
 

@@ -5,10 +5,10 @@ Test runner script for pyiron_workflow_lammps.
 This script provides an easy way to run all unit tests for the module.
 """
 
-import sys
+import argparse
 import os
 import subprocess
-import argparse
+import sys
 from pathlib import Path
 
 
@@ -28,7 +28,7 @@ def run_pytest_tests(verbose=False, coverage=False, specific_file=None):
         cmd.append("tests/unit/")
 
     print(f"Running command: {' '.join(cmd)}")
-    result = subprocess.run(cmd, cwd=Path(__file__).parent)
+    result = subprocess.run(cmd, check=False, cwd=Path(__file__).parent)
     return result.returncode
 
 
@@ -41,7 +41,7 @@ def run_unittest_suite():
         return 1
 
     print(f"Running test suite: {test_suite_path}")
-    result = subprocess.run([sys.executable, str(test_suite_path)])
+    result = subprocess.run([sys.executable, str(test_suite_path)], check=False)
     return result.returncode
 
 

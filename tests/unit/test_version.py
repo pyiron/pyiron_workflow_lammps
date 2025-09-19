@@ -1,7 +1,7 @@
-import unittest
-import sys
 import os
-from unittest.mock import patch, MagicMock
+import sys
+import unittest
+from unittest.mock import MagicMock, patch
 
 # Add the module path to sys.path for testing
 sys.path.insert(
@@ -9,13 +9,13 @@ sys.path.insert(
 )
 
 from pyiron_workflow_lammps._version import (
-    get_keywords,
-    get_config,
-    NotThisMethod,
-    run_command,
-    register_vcs_handler,
     HANDLERS,
     LONG_VERSION_PY,
+    NotThisMethod,
+    get_config,
+    get_keywords,
+    register_vcs_handler,
+    run_command,
 )
 
 

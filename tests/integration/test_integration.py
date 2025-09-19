@@ -1,19 +1,11 @@
-import unittest
-import tempfile
-import os
 import shutil
-from unittest.mock import patch, MagicMock
-import numpy as np
-from ase import Atoms
-from ase.build import bulk
+import tempfile
+import unittest
 
+from ase.build import bulk
 from pyiron_workflow_atomistics.dataclass_storage import CalcInputStatic
+
 from pyiron_workflow_lammps.engine import LammpsEngine
-from pyiron_workflow_lammps.lammps import (
-    write_LammpsStructure,
-    write_LammpsInput,
-    parse_LammpsOutput,
-)
 
 
 class TestLammpsIntegration(unittest.TestCase):

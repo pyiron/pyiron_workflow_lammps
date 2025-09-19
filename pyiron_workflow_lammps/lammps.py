@@ -1,13 +1,14 @@
 # Standard library imports
 import os
-from typing import Any, Callable, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 import numpy as np
 
 # Local imports
 import pyiron_workflow as pwf
-from pyiron_snippets.logger import logger
 from ase import Atoms
+from pyiron_snippets.logger import logger
 
 
 @pwf.as_function_node("working_directory")
@@ -70,9 +71,9 @@ def write_LammpsInput(
 @pwf.as_function_node("lammps_output")
 def parse_LammpsOutput(
     working_directory: str,
-    potential_elements: List[str],
+    potential_elements: list[str],
     units: str,
-    prism: Optional[List[List[float]]] = None,
+    prism: list[list[float]] | None = None,
     lammps_structure_filepath: str = "lammps.data",
     dump_out_file_name: str = "dump.out",
     log_lammps_file_name: str = "log.lammps",
@@ -80,11 +81,13 @@ def parse_LammpsOutput(
     _parser_fn=None,
     _parser_fn_kwargs=None,
 ):
-    from pyiron_workflow_atomistics.dataclass_storage import EngineOutput
-    from pyiron_lammps import parse_lammps_output_files
-    from ase.io.lammpsdata import read_lammps_data
-    from pyiron_workflow_lammps.generic import isLineInFile
     import warnings
+
+    from ase.io.lammpsdata import read_lammps_data
+    from pyiron_lammps import parse_lammps_output_files
+    from pyiron_workflow_atomistics.dataclass_storage import EngineOutput
+
+    from pyiron_workflow_lammps.generic import isLineInFile
 
     warnings.filterwarnings("ignore")
     if _parser_fn is None:
@@ -183,7 +186,7 @@ def get_structure_species_lists(
 
 def get_species_map(lammps_data_filepath="lammps.data"):
     species_map = {}
-    with open(lammps_data_filepath, "r") as f:
+    with open(lammps_data_filepath) as f:
         # find the "Masses" section
         for line in f:
             if line.strip() == "Masses":
@@ -234,7 +237,7 @@ def lammps_job(
     structure: Atoms,
     lammps_input: str,
     units: str,
-    potential_elements: List[str],
+    potential_elements: list[str],
     lammps_structure_filepath: str = "lammps.data",
     input_filename: str = "in.lmp",
     dump_out_file_name: str = "dump.out",
@@ -323,7 +326,7 @@ def lammps_calculator_fn(
     structure: Atoms,
     lammps_input: str,
     units: str,
-    potential_elements: List[str],
+    potential_elements: list[str],
     input_filename: str = "in.lmp",
     command: str = "mpirun -np 40 --bind-to none /cmcm/ptmp/hmai/LAMMPS/lammps_grace/build/lmp -in in.lmp -log minimize.log",
     lammps_log_filepath: str = "log.lammps",

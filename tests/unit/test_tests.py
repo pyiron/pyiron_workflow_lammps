@@ -23,9 +23,7 @@ class TestModuleImports(unittest.TestCase):
     def test_module_imports(self):
         """Test that all main modules can be imported."""
         # Test main module imports
-        from pyiron_workflow_lammps import lammps
-        from pyiron_workflow_lammps import engine
-        from pyiron_workflow_lammps import generic
+        from pyiron_workflow_lammps import engine, generic, lammps
 
         # Test that modules have expected attributes
         self.assertTrue(hasattr(lammps, "write_LammpsStructure"))

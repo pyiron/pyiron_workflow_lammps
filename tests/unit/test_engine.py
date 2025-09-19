@@ -1,17 +1,16 @@
-import unittest
-import tempfile
 import os
 import shutil
-from unittest.mock import patch, MagicMock, mock_open
-import numpy as np
-from ase import Atoms, Atom
-from ase.build import bulk
+import tempfile
+import unittest
 
+from ase import Atom
+from ase.build import bulk
 from pyiron_workflow_atomistics.dataclass_storage import (
-    CalcInputStatic,
-    CalcInputMinimize,
     CalcInputMD,
+    CalcInputMinimize,
+    CalcInputStatic,
 )
+
 from pyiron_workflow_lammps.engine import LammpsEngine
 
 
@@ -393,7 +392,7 @@ class TestLammpsEngine(unittest.TestCase):
         self.assertTrue(os.path.exists(expected_path))
 
         # Check file content
-        with open(filepath, "r") as f:
+        with open(filepath) as f:
             content = f.read()
 
         self.assertIn("units metal", content)
