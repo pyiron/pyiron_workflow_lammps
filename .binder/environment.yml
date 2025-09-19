@@ -9,6 +9,7 @@ dependencies:
 - pyiron_workflow =0.15.2
 - pyiron_lammps =0.4.6
 - pandas =2.3.1
+- lammps =2024.08.29
 - pysqa =0.3.0
 - pip:
   - pyiron_workflow_atomistics==0.0.1
