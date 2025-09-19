@@ -6,11 +6,11 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'pyiron_workflow_lammps'))
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Import all test modules
-from test_lammps import *
-from test_engine import *
-from test_generic import *
-from test_version import *
-from test_tests import *
+from .test_lammps import *
+from .test_engine import *
+from .test_generic import *
+from .test_version import *
+from .test_tests import *
 
 
 def create_test_suite():
