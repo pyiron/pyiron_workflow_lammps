@@ -62,7 +62,7 @@ source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
 master_doc = "index"
 
 # General information about the project.
-project = "pyiron_module_template"
+project = "pyiron_workflow_lammps"
 copyright = (
     "2024, Max-Planck-Institut für Nachhaltige Materialien GmbH - Computational Materials Design (CM) Department "
     "All rights reserved"
@@ -252,8 +252,8 @@ latex_elements = {
 latex_documents = [
     (
         "index",
-        "pyiron_module_template.tex",
-        "pyiron_module_template Documentation",
+        "pyiron_workflow_lammps.tex",
+        "pyiron_workflow_lammps Documentation",
         "Max-Planck-Institut für Nachhaltige Materialien GmbH - Computational Materials Design (CM) Department",
         "manual",
     ),
