@@ -4,7 +4,7 @@ import os
 
 # Add the module path to sys.path for testing
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'pyiron_workflow_lammps'))
-
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 # Import all test modules
 from test_lammps import *
 from test_engine import *
