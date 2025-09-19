@@ -15,6 +15,7 @@ import warnings
 from pyiron_workflow import Workflow
 import pyiron_workflow as pwf
 
+
 class Storage:
     def _convert_to_dict(instance):
         # Get the attributes of the instance
@@ -27,13 +28,15 @@ class Storage:
 
         return result_dict
 
+
 class ShellOutput(Storage):
     stdout: str
     stderr: str
     return_code: int
     dump: FileObject  # TODO: should be done in a specific lammps object
     log: FileObject
-    
+
+
 class VarType:
     def __init__(
         self,
@@ -74,7 +77,8 @@ class FileObject:
     @property
     def name(self):
         return self._path.name
-    
+
+
 @Workflow.wrap.as_function_node("output")
 def shell(
     command: str,
@@ -84,13 +88,13 @@ def shell(
 ) -> ShellOutput:
     """
     Run a shell command in the specified working directory.
-    
+
     Args:
         command (str): The command to execute.
         working_directory (str | None, optional): The working directory. Defaults to None.
         environment (Optional[dict[str, str]], optional): Environment variables to set. Defaults to None.
         arguments (Optional[list[str]], optional): Command line arguments. Defaults to None.
-    
+
     Returns:
         ShellOutput: Object containing stdout, stderr, and return code.
     """
@@ -118,18 +122,19 @@ def shell(
     # os.chdir(curr_dir)
     return output
 
+
 @Workflow.wrap.as_function_node("line_found")
 def isLineInFile(filepath: str, line: str, exact_match: bool = True) -> bool:
     """
     Check if a specific line exists in a file.
-    
+
     Args:
         filepath (str): Path to the file to search in.
         line (str): The line to search for.
-        exact_match (bool, optional): If True, the line must match exactly. If False, 
-                                     the line can be a substring of any line in the file. 
+        exact_match (bool, optional): If True, the line must match exactly. If False,
+                                     the line can be a substring of any line in the file.
                                      Defaults to True.
-    
+
     Returns:
         bool: True if the line is found, False otherwise.
     """
@@ -146,17 +151,17 @@ def isLineInFile(filepath: str, line: str, exact_match: bool = True) -> bool:
     except FileNotFoundError:
         logger.error(f"File '{filepath}' not found.")
     return line_found
-    
+
+
 @pwf.as_function_node("working_directory")
-def create_WorkingDirectory(working_directory: str,
-                            quiet: bool = False) -> str:
+def create_WorkingDirectory(working_directory: str, quiet: bool = False) -> str:
     """
     Create a working directory if it doesn't exist.
-    
+
     Args:
         working_directory (str): Path to the directory to create.
         quiet (bool, optional): If True, suppress warnings. Defaults to False.
-    
+
     Returns:
         str: Path to the created or existing directory.
     """
@@ -170,10 +175,13 @@ def create_WorkingDirectory(working_directory: str,
                 f"Directory '{working_directory}' already exists. Existing files may be overwritten."
             )
         else:
-            logger.info(f"Directory '{working_directory}' already exists. Existing files will not be overwritten.")
-            
+            logger.info(
+                f"Directory '{working_directory}' already exists. Existing files will not be overwritten."
+            )
+
     return working_directory
-    
+
+
 @Workflow.wrap.as_function_node("working_directory")
 def delete_files_recursively(working_directory: str, files_to_be_deleted: list[str]):
     """
@@ -196,6 +204,7 @@ def delete_files_recursively(working_directory: str, files_to_be_deleted: list[s
                     except Exception as e:
                         logger.error(f"Error deleting {file_path}: {e}")
     return working_directory
+
 
 @Workflow.wrap.as_function_node("compressed_file")
 def compress_directory(
@@ -253,7 +262,8 @@ def compress_directory(
                     if file_path == output_file:
                         continue
                     if any(
-                        fnmatch.fnmatch(file, pattern) for pattern in exclude_file_patterns
+                        fnmatch.fnmatch(file, pattern)
+                        for pattern in exclude_file_patterns
                     ):
                         continue
                     if file in exclude_files:
@@ -271,7 +281,8 @@ def compress_directory(
         output_file = None
         logger.info(f"compress_directory: no compression")
     return output_file
-    
+
+
 def submit_to_slurm(
     node,
     /,
@@ -289,7 +300,7 @@ def submit_to_slurm(
     An example of a helper function for running nodes on slurm.
 
     - Saves the node
-    - Writes a slurm batch script that 
+    - Writes a slurm batch script that
         - Loads the node
         - Runs it
         - Saves it again
@@ -300,15 +311,15 @@ def submit_to_slurm(
             f"Can only submit parent-most nodes, but {node.full_label} "
             f"has root {node.graph_root.full_label}"
         )
-        
+
     node.save(backend="pickle")
     p = node.as_path()
-    
+
     if job_name is None:
-        job_name = node.full_label 
+        job_name = node.full_label
         job_name = job_name.replace(node.lexical_delimiter, "_")
         job_name = "pwf" + job_name
-        
+
     script_content = f"""#!/bin/bash
 #SBATCH --job-name={job_name} 
 #SBATCH --output={p.joinpath("slurm.out").resolve() if output_file is None else output_file}
@@ -331,9 +342,11 @@ EOF
     submission_script = p.joinpath("node_submission.sh")
     submission_script.write_text(script_content)
     import subprocess
+
     submission = subprocess.run(["sbatch", submission_script.resolve()])
     return submission
-    
+
+
 @Workflow.wrap.as_function_node("compressed_file")
 def remove_dir(directory_path, actually_remove=False):
     if actually_remove:
