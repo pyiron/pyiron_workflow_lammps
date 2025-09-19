@@ -60,7 +60,7 @@ def write_updated_toml(
     semantic_upper_bound: str,
     always_pin_unstable: str,
     output_toml: str,
-    pypi_to_conda_name_map_file: str
+    pypi_to_conda_name_map_file: str,
 ) -> None:
 
     with open(input_toml, "r") as file:
@@ -120,11 +120,15 @@ def load_yaml(yaml_file: str) -> dict:
             if "pip" in dependency.keys():
                 for pip_dependency in dependency["pip"]:
                     if "==" in pip_dependency:
-                        package, version = split_dependency(pip_dependency, "==", allow_no_version=True)
+                        package, version = split_dependency(
+                            pip_dependency, "==", allow_no_version=True
+                        )
                         yaml_bounds[package] = version
                     # If no "==", discard it as requested
             else:
-                raise ValueError(f"Expected 'pip' key in dependency but got {dependency}")
+                raise ValueError(
+                    f"Expected 'pip' key in dependency but got {dependency}"
+                )
             continue
         else:
             package, version = split_dependency(dependency, "=", allow_no_version=True)
@@ -155,17 +159,13 @@ def update_dependency(
     upper_bound_data: dict[str, str],
     semantic_upper_bound: str | None,
     always_pin_unstable: bool,
-    pypi_to_conda_map: dict[str, str]
+    pypi_to_conda_map: dict[str, str],
 ):
     explicit_lower_bound = get_explicit_bound(
-        lower_bound_data,
-        package_name,
-        pypi_to_conda_map
+        lower_bound_data, package_name, pypi_to_conda_map
     )
     explicit_upper_bound = get_explicit_bound(
-        upper_bound_data,
-        package_name,
-        pypi_to_conda_map
+        upper_bound_data, package_name, pypi_to_conda_map
     )
 
     lower_bound = (
@@ -174,9 +174,7 @@ def update_dependency(
 
     if explicit_upper_bound is None:
         bound_type, upper_bound = get_semantic_upper_bound(
-            input_version,
-            semantic_upper_bound,
-            always_pin_unstable
+            input_version, semantic_upper_bound, always_pin_unstable
         )
     else:
         bound_type, upper_bound = "<", explicit_upper_bound
@@ -188,9 +186,7 @@ def update_dependency(
 
 
 def get_explicit_bound(
-    yaml_data: dict[str, str],
-    package_name: str,
-    pypi_to_conda_map: dict[str, str]
+    yaml_data: dict[str, str], package_name: str, pypi_to_conda_map: dict[str, str]
 ) -> str | None:
     try:
         conda_package_name = pypi_to_conda_map[package_name]
@@ -205,9 +201,7 @@ def get_explicit_bound(
 
 
 def get_semantic_upper_bound(
-    input_version: str,
-    semantic_upper_bound: str | None,
-    always_pin_unstable: bool
+    input_version: str, semantic_upper_bound: str | None, always_pin_unstable: bool
 ) -> tuple[str, str]:
     if not is_semantic(input_version):
         # Just short-circuit return the input if we can't parse it semantically
@@ -251,46 +245,46 @@ def parse_args():
         "--input_toml",
         type=str,
         default="pyproject.toml",
-        help="Input TOML file with `project.dependencies` and `==` pinned dependencies."
+        help="Input TOML file with `project.dependencies` and `==` pinned dependencies.",
     )
     parser.add_argument(
         "--lower_bound_yaml",
         type=str,
         default="none",
         help="Optional YAML conda environment file with lower bounds for select "
-             "dependencies."
+        "dependencies.",
     )
     parser.add_argument(
         "--upper_bound_yaml",
         type=str,
         default="none",
         help="Optional YAML conda environment file with upper bounds for select "
-             "dependencies."
+        "dependencies.",
     )
     parser.add_argument(
         "--semantic_upper_bound",
         choices=["patch", "minor", "major", "none"],
         default="minor",
-        help="Upper bound policy for semantically versioned dependencies."
+        help="Upper bound policy for semantically versioned dependencies.",
     )
     parser.add_argument(
         "--always_pin_unstable",
         choices=["yes", "no"],
         default="yes",
-        help="Whether to always pin unstable dependencies (0.Y.Z) all the way to patch."
+        help="Whether to always pin unstable dependencies (0.Y.Z) all the way to patch.",
     )
     parser.add_argument(
         "--output_toml",
         type=str,
         default="none",
-        help="Optional output destination for toml with updated dependency versions."
+        help="Optional output destination for toml with updated dependency versions.",
     )
     parser.add_argument(
         "--pypi_to_conda_name_map_file",
         type=str,
         default="none",
         help="Optional JSON file to remap pypi package names in the toml file(s) to "
-             "conda package names in the yaml file(s)."
+        "conda package names in the yaml file(s).",
     )
     return parser.parse_args()
 
@@ -304,5 +298,5 @@ if __name__ == "__main__":
         args.semantic_upper_bound,
         args.always_pin_unstable,
         args.output_toml,
-        args.pypi_to_conda_name_map_file
+        args.pypi_to_conda_name_map_file,
     )

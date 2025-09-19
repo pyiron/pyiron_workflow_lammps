@@ -107,7 +107,8 @@ def shell(
     environ.update({k: str(v) for k, v in environment.items()})
     proc = subprocess.run(
         [command, *map(str, arguments)],
-        check=False, capture_output=True,
+        check=False,
+        capture_output=True,
         cwd=working_directory,
         encoding="utf8",
         env=environ,
