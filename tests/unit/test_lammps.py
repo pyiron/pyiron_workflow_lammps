@@ -40,7 +40,7 @@ class TestWriteLammpsStructure(unittest.TestCase):
             potential_elements=self.potential_elements,
             units="metal",
             file_name="test.data"
-        )
+        )()
         self.assertEqual(result, self.temp_dir)
 
 class TestWriteLammpsInput(unittest.TestCase):
