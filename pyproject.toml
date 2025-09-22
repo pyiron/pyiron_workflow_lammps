@@ -24,7 +24,7 @@ classifiers = [
 ]
 dependencies = [
     "numpy==1.26.4",
-    "pandas==2.3.1",
+    "pandas==2.3.2",
     "pyiron-workflow==0.15.2",
     "pyiron-workflow-atomistics==0.0.2",
     "pyiron-lammps==0.4.6",
