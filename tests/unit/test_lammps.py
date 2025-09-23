@@ -466,7 +466,7 @@ class TestLammpsJob(unittest.TestCase):
             lammps_input=self.Engine._build_script(self.structure),
             units=self.units,
             potential_elements=self.potential_elements,
-        )
+        )()
 
         # Verify workflow wiring
         # self.assertEqual(result.working_dir, self.temp_dir)
