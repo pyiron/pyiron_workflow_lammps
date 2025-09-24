@@ -435,10 +435,10 @@ class TestLammpsJob(unittest.TestCase):
         self.Engine = LammpsEngine(EngineInput=self.EngineInput)
         self.Engine.working_directory = "EnginePrototypeStatic"
         self.Engine.command = (
-            "/root/github_dev/lammps/build/lmp -in in.lmp -log minimize.log"
+            "lmp -in in.lmp -log minimize.log"
         )
         self.Engine.lammps_log_filepath = "minimize.log"
-        self.Engine.path_to_model = "/root/github_dev/test_workflow_nodes/2025_04_29_FeGB_Segregation_Workflows/final_model"
+        self.Engine.path_to_model = os.sep.join(["..", "resources", "Al-Fe.eam.fs"])
         self.potential_elements = self.Engine.get_lammps_element_order(self.structure)
         self.input_filename = "in.lmp"
         self.lammps_log_convergence_printout = "Total wall time:"
@@ -459,7 +459,10 @@ class TestLammpsJob(unittest.TestCase):
 
     def test_lammps_job(self):
         """Test the complete LAMMPS job workflow."""
-
+        print(os.system("which lmp"))
+        print(os.system("pwd"))
+        print(os.getcwd())
+        print(os.listdir(os.getcwd()))
         result = lammps_job(
             working_directory=self.Engine.working_directory,
             structure=self.structure,
