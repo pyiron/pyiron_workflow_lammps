@@ -472,7 +472,7 @@ class TestLammpsJob(unittest.TestCase):
             units=self.units,
             potential_elements=self.potential_elements,
         )()
-
+        print(os.system("cat EnginePrototypeStatic/minimize.log"))
         # Verify workflow wiring
         # self.assertEqual(result.working_dir, self.temp_dir)
 
