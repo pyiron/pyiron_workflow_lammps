@@ -438,7 +438,8 @@ class TestLammpsJob(unittest.TestCase):
             "lmp -in in.lmp -log minimize.log"
         )
         self.Engine.lammps_log_filepath = "minimize.log"
-        self.Engine.path_to_model = os.sep.join(["..", "resources", "Al-Fe.eam.fs"])
+        resources_dir = os.path.join(os.path.dirname(__file__), "..", "resources")
+        self.Engine.path_to_model = os.sep.join([resources_dir, "Al-Fe.eam.fs"])
         self.potential_elements = self.Engine.get_lammps_element_order(self.structure)
         self.input_filename = "in.lmp"
         self.lammps_log_convergence_printout = "Total wall time:"
