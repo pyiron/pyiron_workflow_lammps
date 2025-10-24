@@ -435,10 +435,12 @@ class TestLammpsJob(unittest.TestCase):
         self.Engine = LammpsEngine(EngineInput=self.EngineInput)
         self.Engine.working_directory = "EnginePrototypeStatic"
         self.Engine.command = (
-            "/root/github_dev/lammps/build/lmp -in in.lmp -log minimize.log"
+            "lmp -in in.lmp -log minimize.log"
         )
         self.Engine.lammps_log_filepath = "minimize.log"
-        self.Engine.path_to_model = "/root/github_dev/test_workflow_nodes/2025_04_29_FeGB_Segregation_Workflows/final_model"
+        resources_dir = os.path.join(os.path.dirname(__file__), "..", "resources")
+        resources_dir = "/home/runner/work/pyiron_workflow_lammps/pyiron_workflow_lammps/tests/unit/resources"
+        self.Engine.path_to_model = os.sep.join([resources_dir, "Al-Fe.eam.fs"])
         self.potential_elements = self.Engine.get_lammps_element_order(self.structure)
         self.input_filename = "in.lmp"
         self.lammps_log_convergence_printout = "Total wall time:"
@@ -459,15 +461,19 @@ class TestLammpsJob(unittest.TestCase):
 
     def test_lammps_job(self):
         """Test the complete LAMMPS job workflow."""
-
+        print(os.system("which lmp"))
+        print(os.system("pwd"))
+        print(os.getcwd())
+        print(os.listdir(os.getcwd()))
+        print(os.listdir(os.getcwd()))
         result = lammps_job(
             working_directory=self.Engine.working_directory,
             structure=self.structure,
             lammps_input=self.Engine._build_script(self.structure),
             units=self.units,
             potential_elements=self.potential_elements,
-        )
-
+        )()
+        print(os.system("cat EnginePrototypeStatic/minimize.log"))
         # Verify workflow wiring
         # self.assertEqual(result.working_dir, self.temp_dir)
 
