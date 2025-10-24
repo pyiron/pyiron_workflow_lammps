@@ -37,6 +37,9 @@ class LammpsEngine(Engine):
     raw_script: str | None = None
     potential_elements: list[str] = None
     path_to_model: str = "/path/to/model"
+    max_evaluations: int = 10000  # New: Engine-specific, NOT taken from dataclass
+    max_iterations: int = 10000  # New: Engine-specific, NOT taken from dataclass
+    
     # Default boilerplate fields for the input script
     input_script_units: str = "metal"
     input_script_dimension: int = 3
@@ -156,8 +159,15 @@ class LammpsEngine(Engine):
         elif self.mode == "minimize":
             energy_convergence_tolerance = self.EngineInput.energy_convergence_tolerance
             force_convergence_tolerance = self.EngineInput.force_convergence_tolerance
-            max_iterations = self.EngineInput.max_iterations
-            max_evaluations = self.EngineInput.max_evaluations
+            if self.max_iterations is not None:
+                warnings.warn(
+                    f"'max_iterations' provided to Engine takes precedence over EngineInput.max_iterations. Overwriting EngineInput.max_iterations {self.EngineInput.max_iterations} with {self.max_iterations}",
+                    RuntimeWarning,
+                )
+                max_iterations = self.max_iterations
+            else:
+                max_iterations = self.EngineInput.max_iterations
+            max_evaluations = self.max_evaluations   # Because counting force calls is a lammps specific thing
             if self.EngineInput.relax_cell:
                 lines.append(
                     f"fix 1 all box/relax {self.input_script_relax_type} {self.input_script_relax_pressure:.6f} vmax {self.input_script_relax_vmax}"
