@@ -59,7 +59,7 @@ notebook = [
 ]
 cluster = [
     "pysqa==0.3.0",
-    "h5py==3.14.0",
+    "h5py==3.15.1",
 ]
 
 [tool.versioneer]
