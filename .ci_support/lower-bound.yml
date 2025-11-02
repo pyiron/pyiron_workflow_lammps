@@ -13,6 +13,6 @@ dependencies:
   # If pyiron_snippets isn’t on conda-forge, install via pip below
   - pysqa =0.3.0
   - pip:
-      - pyiron-workflow-atomistics==0.0.2
+      - pyiron-workflow-atomistics==0.0.3
       - pyiron-snippets==0.2.0
       - -e .[dev]         # install your package + dev extras in editable mode
