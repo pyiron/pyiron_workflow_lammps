@@ -18,5 +18,5 @@ dependencies:
 - lammps =2024.08.29
 - pysqa =0.3.0
 - pip:
-  - pyiron-workflow-atomistics==0.0.3
+  - pyiron-workflow-atomistics==0.0.4
   - pyiron-snippets==0.2.0
