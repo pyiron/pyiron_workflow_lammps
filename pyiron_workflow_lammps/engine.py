@@ -38,7 +38,7 @@ class LammpsEngine(Engine):
     potential_elements: list[str] = None
     path_to_model: str = "/path/to/model"
     max_evaluations: int = 10000  # New: Engine-specific, NOT taken from dataclass
-    max_iterations: int = 10000  # New: Engine-specific, NOT taken from dataclass
+    max_iterations: int | None = None  # New: Engine-specific, NOT taken from dataclass
     
     # Default boilerplate fields for the input script
     input_script_units: str = "metal"
