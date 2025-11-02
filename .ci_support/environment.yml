@@ -15,4 +15,3 @@ dependencies:
   - pip:
       - pyiron-workflow-atomistics==0.0.3
       - pyiron-snippets==0.2.0
-      - -e .[dev]         # install your package + dev extras in editable mode
