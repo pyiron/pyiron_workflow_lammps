@@ -28,7 +28,7 @@ dependencies = [
     "pyiron-workflow==0.15.2",
     "pyiron-workflow-atomistics==0.0.4",
     "pyiron-lammps==0.4.6",
-    "ase==3.26.0",
+    "ase==3.27.0",
     "pymatgen==2025.6.14",
 ]
 dynamic = ["version"]
