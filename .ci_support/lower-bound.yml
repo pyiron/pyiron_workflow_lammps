@@ -5,15 +5,15 @@ dependencies:
   - python=3.11
   - pip
   - numpy=1.26.4
-  - ase=3.28.0
-  - pymatgen=2026.5.4
+  - ase>=3.22.1,<=3.26.0
+  - pymatgen>=2025.6.14
   - pyiron_workflow=0.15.6
   - pyiron_lammps=0.4.6
-  - pandas=3.0.2
-  - scipy=1.17.1
-  - matplotlib=3.10.9
-  - scikit-learn=1.8.0
-  - tqdm=4.67.3
+  - pandas>=2.0.3,<=2.3.1
+  - scipy>=1.11.1
+  - matplotlib>=3.4.0
+  - scikit-learn>=1.0.0
+  - tqdm>=4.67.3
   - lammps=2024.08.29
   - pysqa=0.3.0
   - pip:
