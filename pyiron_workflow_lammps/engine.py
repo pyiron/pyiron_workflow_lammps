@@ -210,30 +210,30 @@ class LammpsEngine:
             elif md.mode == "NVT":
                 if md.thermostat == "nose-hoover":
                     lines.append(
-                        f"fix 1 all nvt temp {md.temperature} {md.temperature} {md.temperature_damping_timescale}"
+                        f"fix 1 all nvt temp {md.temperature} {md.temperature} {md.thermostat_time_constant}"
                     )
                 elif md.thermostat == "berendsen":
                     lines.append(
-                        f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {md.temperature_damping_timescale}"
+                        f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {md.thermostat_time_constant}"
                     )
                 elif md.thermostat == "andersen":
                     lines.append(
-                        f"fix 1 all langevin {md.temperature} {md.temperature} {md.temperature_damping_timescale} {md.seed}"
+                        f"fix 1 all langevin {md.temperature} {md.temperature} {md.thermostat_time_constant} {md.seed}"
                     )
                     lines.append("fix 2 all nve")
                 elif md.thermostat == "temp/rescale":
-                    delta = md.delta_temp or 0.0
+                    delta = getattr(md, "delta_temp", None) or 0.0
                     lines.append(
                         f"fix 1 all temp/rescale {md.n_print} {md.temperature} {md.temperature} {delta} units box"
                     )
                 elif md.thermostat == "temp/csvr":
                     lines.append(
-                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {md.temperature_damping_timescale}"
+                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {md.thermostat_time_constant}"
                     )
                 elif md.thermostat == "langevin":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} "
-                        f"{md.temperature_damping_timescale} {md.seed}"
+                        f"{md.thermostat_time_constant} {md.seed}"
                     )
                     lines.append("fix 2 all nve")
                 else:
@@ -244,7 +244,7 @@ class LammpsEngine:
                 if md.thermostat != "nose-hoover":
                     raise ValueError("NPT mode supports only 'nose-hoover' thermostat")
                 lines.append(
-                    f"fix 1 all npt temp {md.temperature} {md.temperature} {md.temperature_damping_timescale} "
+                    f"fix 1 all npt temp {md.temperature} {md.temperature} {md.thermostat_time_constant} "
                     f"iso {pressure_bar} {pressure_bar} {md.pressure_damping_timescale}"
                 )
             else:
