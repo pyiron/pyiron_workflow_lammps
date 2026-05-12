@@ -146,7 +146,7 @@ def parse_LammpsOutput(
             final_energy=energies_traj[-1],
             converged=bool(converged),
             final_forces=forces_traj[-1],
-            final_stress=stresses_traj[-1],          # 3x3 stress tensor
+            final_stress=stresses_traj[-1],  # 3x3 stress tensor
             final_volume=final_atoms.get_volume(),
             energies=energies_traj,
             forces=forces_traj,

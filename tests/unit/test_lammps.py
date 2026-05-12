@@ -434,9 +434,7 @@ class TestLammpsJob(unittest.TestCase):
 
         self.Engine = LammpsEngine(EngineInput=self.EngineInput)
         self.Engine.working_directory = "EnginePrototypeStatic"
-        self.Engine.command = (
-            "lmp -in in.lmp -log minimize.log"
-        )
+        self.Engine.command = "lmp -in in.lmp -log minimize.log"
         self.Engine.lammps_log_filepath = "minimize.log"
         resources_dir = os.path.join(os.path.dirname(__file__), "..", "resources")
         resources_dir = "/home/runner/work/pyiron_workflow_lammps/pyiron_workflow_lammps/tests/unit/resources"

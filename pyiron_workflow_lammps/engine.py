@@ -2,7 +2,7 @@ import os
 import textwrap
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 from ase import Atoms
@@ -38,7 +38,7 @@ class LammpsEngine:
     path_to_model: str = "/path/to/model"
     max_evaluations: int = 10000  # New: Engine-specific, NOT taken from dataclass
     max_iterations: int | None = None  # New: Engine-specific, NOT taken from dataclass
-    
+
     # Default boilerplate fields for the input script
     input_script_units: str = "metal"
     input_script_dimension: int = 3
@@ -93,12 +93,9 @@ class LammpsEngine:
         directory (otherwise the sub-engine would inherit the parent's
         stale cached kwargs).
         """
-        from dataclasses import replace as _replace
-        import os as _os
-
-        return _replace(
+        return replace(
             self,
-            working_directory=_os.path.join(self.working_directory, subdir),
+            working_directory=os.path.join(self.working_directory, subdir),
             calc_fn=None,
             calc_fn_kwargs=None,
         )
@@ -185,7 +182,9 @@ class LammpsEngine:
                 max_iterations = self.max_iterations
             else:
                 max_iterations = self.EngineInput.max_iterations
-            max_evaluations = self.max_evaluations   # Because counting force calls is a lammps specific thing
+            max_evaluations = (
+                self.max_evaluations
+            )  # Because counting force calls is a lammps specific thing
             if self.EngineInput.relax_cell:
                 lines.append(
                     f"fix 1 all box/relax {self.input_script_relax_type} {self.input_script_relax_pressure:.6f} vmax {self.input_script_relax_vmax}"

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from ase.build import bulk
 from pyiron_workflow_atomistics.engine import CalcInputStatic
 from pyiron_workflow_atomistics.testing import EngineConformanceTests
 
@@ -31,5 +32,4 @@ class TestLammpsEngineConformance(EngineConformanceTests):
 
     @staticmethod
     def test_structure_factory():
-        from ase.build import bulk
         return bulk("Fe", "bcc", a=2.85, cubic=True)
