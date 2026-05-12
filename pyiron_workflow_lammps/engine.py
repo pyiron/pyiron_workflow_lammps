@@ -84,6 +84,25 @@ class LammpsEngine:
         if self.parse_fn_kwargs is None:
             self.parse_fn_kwargs = {}
 
+    def with_working_directory(self, subdir: str) -> "LammpsEngine":
+        """Return a copy of this engine with working_directory composed.
+
+        Pure — never mutates self. Re-initialises self.calc_fn /
+        self.calc_fn_kwargs to None on the copy so the next
+        get_calculate_fn() call rebuilds the script against the new
+        directory (otherwise the sub-engine would inherit the parent's
+        stale cached kwargs).
+        """
+        from dataclasses import replace as _replace
+        import os as _os
+
+        return _replace(
+            self,
+            working_directory=_os.path.join(self.working_directory, subdir),
+            calc_fn=None,
+            calc_fn_kwargs=None,
+        )
+
     def get_lammps_element_order(self, atoms: Atoms) -> list[str]:
         return list(dict.fromkeys(atoms.get_chemical_symbols()))
 
