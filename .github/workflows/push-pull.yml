@@ -21,7 +21,8 @@ jobs:
       python-version: '3.12'
       # conda-forge lammps=2024.08.29 has no Windows build; drop windows
       # from the runner matrix so the conda solver doesn't kill the run.
-      runner-alt2: 'exclude'
+      # (runner-alt1 = windows-latest; runner-alt2 = macos-latest — keep mac.)
+      runner-alt1: 'exclude'
       # Test lower bounds:
       alternate-tests-env-files: .ci_support/lower-bound.yml
       alternate-tests-python-version: '3.11'
