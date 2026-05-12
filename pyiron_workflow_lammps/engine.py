@@ -2,20 +2,19 @@ import os
 import textwrap
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 
 from ase import Atoms
-from pyiron_workflow_atomistics.dataclass_storage import (
+from pyiron_workflow_atomistics.engine import (
     CalcInputMD,
     CalcInputMinimize,
     CalcInputStatic,
-    Engine,
 )
 
 
 @dataclass
-class LammpsEngine(Engine):
+class LammpsEngine:
     """
     Unified LAMMPS Engine using InputCalc dataclasses directly to build scripts.
     Mode is inferred from EngineInput by checking key attributes; boilerplate defaults
@@ -39,7 +38,7 @@ class LammpsEngine(Engine):
     path_to_model: str = "/path/to/model"
     max_evaluations: int = 10000  # New: Engine-specific, NOT taken from dataclass
     max_iterations: int | None = None  # New: Engine-specific, NOT taken from dataclass
-    
+
     # Default boilerplate fields for the input script
     input_script_units: str = "metal"
     input_script_dimension: int = 3
@@ -84,6 +83,22 @@ class LammpsEngine(Engine):
             self.calc_fn_kwargs = {}
         if self.parse_fn_kwargs is None:
             self.parse_fn_kwargs = {}
+
+    def with_working_directory(self, subdir: str) -> "LammpsEngine":
+        """Return a copy of this engine with working_directory composed.
+
+        Pure — never mutates self. Re-initialises self.calc_fn /
+        self.calc_fn_kwargs to None on the copy so the next
+        get_calculate_fn() call rebuilds the script against the new
+        directory (otherwise the sub-engine would inherit the parent's
+        stale cached kwargs).
+        """
+        return replace(
+            self,
+            working_directory=os.path.join(self.working_directory, subdir),
+            calc_fn=None,
+            calc_fn_kwargs=None,
+        )
 
     def get_lammps_element_order(self, atoms: Atoms) -> list[str]:
         return list(dict.fromkeys(atoms.get_chemical_symbols()))
@@ -167,7 +182,9 @@ class LammpsEngine(Engine):
                 max_iterations = self.max_iterations
             else:
                 max_iterations = self.EngineInput.max_iterations
-            max_evaluations = self.max_evaluations   # Because counting force calls is a lammps specific thing
+            max_evaluations = (
+                self.max_evaluations
+            )  # Because counting force calls is a lammps specific thing
             if self.EngineInput.relax_cell:
                 lines.append(
                     f"fix 1 all box/relax {self.input_script_relax_type} {self.input_script_relax_pressure:.6f} vmax {self.input_script_relax_vmax}"
@@ -192,30 +209,30 @@ class LammpsEngine(Engine):
             elif md.mode == "NVT":
                 if md.thermostat == "nose-hoover":
                     lines.append(
-                        f"fix 1 all nvt temp {md.temperature} {md.temperature} {md.temperature_damping_timescale}"
+                        f"fix 1 all nvt temp {md.temperature} {md.temperature} {md.thermostat_time_constant}"
                     )
                 elif md.thermostat == "berendsen":
                     lines.append(
-                        f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {md.temperature_damping_timescale}"
+                        f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {md.thermostat_time_constant}"
                     )
                 elif md.thermostat == "andersen":
                     lines.append(
-                        f"fix 1 all langevin {md.temperature} {md.temperature} {md.temperature_damping_timescale} {md.seed}"
+                        f"fix 1 all langevin {md.temperature} {md.temperature} {md.thermostat_time_constant} {md.seed}"
                     )
                     lines.append("fix 2 all nve")
                 elif md.thermostat == "temp/rescale":
-                    delta = md.delta_temp or 0.0
+                    delta = getattr(md, "delta_temp", None) or 0.0
                     lines.append(
                         f"fix 1 all temp/rescale {md.n_print} {md.temperature} {md.temperature} {delta} units box"
                     )
                 elif md.thermostat == "temp/csvr":
                     lines.append(
-                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {md.temperature_damping_timescale}"
+                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {md.thermostat_time_constant}"
                     )
                 elif md.thermostat == "langevin":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} "
-                        f"{md.temperature_damping_timescale} {md.seed}"
+                        f"{md.thermostat_time_constant} {md.seed}"
                     )
                     lines.append("fix 2 all nve")
                 else:
@@ -226,7 +243,7 @@ class LammpsEngine(Engine):
                 if md.thermostat != "nose-hoover":
                     raise ValueError("NPT mode supports only 'nose-hoover' thermostat")
                 lines.append(
-                    f"fix 1 all npt temp {md.temperature} {md.temperature} {md.temperature_damping_timescale} "
+                    f"fix 1 all npt temp {md.temperature} {md.temperature} {md.thermostat_time_constant} "
                     f"iso {pressure_bar} {pressure_bar} {md.pressure_damping_timescale}"
                 )
             else:

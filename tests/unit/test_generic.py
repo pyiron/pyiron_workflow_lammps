@@ -385,6 +385,25 @@ class TestDeleteFilesRecursively(unittest.TestCase):
         self.assertEqual(result, self.temp_dir)
         self.assertTrue(os.path.exists(test_file))  # Should still exist
 
+    def test_delete_files_recursively_remove_raises(self):
+        """If `os.remove` raises (e.g. permission error), the function must
+        log + continue without propagating (generic.py:202-203).
+        """
+        test_file = os.path.join(self.temp_dir, "doomed.txt")
+        with open(test_file, "w") as f:
+            f.write("content")
+
+        with patch(
+            "pyiron_workflow_lammps.generic.os.remove",
+            side_effect=PermissionError("nope"),
+        ) as mock_remove:
+            result = delete_files_recursively(self.temp_dir, ["doomed.txt"]).run()
+
+        self.assertEqual(result, self.temp_dir)
+        mock_remove.assert_called_once()
+        # File was never actually removed since os.remove was patched out.
+        self.assertTrue(os.path.exists(test_file))
+
 
 class TestCompressDirectory(unittest.TestCase):
     """Test the compress_directory function."""

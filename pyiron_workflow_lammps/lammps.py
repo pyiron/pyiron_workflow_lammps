@@ -85,7 +85,7 @@ def parse_LammpsOutput(
 
     from ase.io.lammpsdata import read_lammps_data
     from pyiron_lammps import parse_lammps_output_files
-    from pyiron_workflow_atomistics.dataclass_storage import EngineOutput
+    from pyiron_workflow_atomistics.engine import EngineOutput
 
     from pyiron_workflow_lammps.generic import isLineInFile
 
@@ -101,7 +101,6 @@ def parse_LammpsOutput(
                 f"Error parsing LAMMPS output: {e}, you must provide a parser function (_parser_fn) and kwargs (_parser_fn_kwargs) if you want to use a custom parser."
             )
 
-        lammps_EngineOutput = EngineOutput()
         pyiron_lammps_output = parse_lammps_output_files(
             working_directory=working_directory,
             structure=read_lammps_data(
@@ -113,49 +112,54 @@ def parse_LammpsOutput(
             dump_out_file_name=dump_out_file_name,
             log_lammps_file_name=log_lammps_file_name,
         )
-        # print(os.path.join(working_directory, lammps_structure_filepath))
-        # print(os.path.join(working_directory, dump_out_file_name))
         species_lists = get_structure_species_lists(
             lammps_data_filepath=os.path.join(
                 working_directory, lammps_structure_filepath
             ),
             lammps_dump_filepath=os.path.join(working_directory, dump_out_file_name),
         )
-        # print(lammps_node_output["generic"]["cells"], len(lammps_node_output["generic"]["cells"]))
+        # Walk the per-step pyiron_lammps_output and build trajectory + finals.
         atoms_list = []
         for i in range(len(pyiron_lammps_output["generic"]["cells"])):
-            atoms = arrays_to_ase_atoms(
-                cells=pyiron_lammps_output["generic"]["cells"][i],
-                positions=pyiron_lammps_output["generic"]["positions"][i],
-                indices=pyiron_lammps_output["generic"]["indices"][i],
-                species_lists=species_lists,
+            atoms_list.append(
+                arrays_to_ase_atoms(
+                    cells=pyiron_lammps_output["generic"]["cells"][i],
+                    positions=pyiron_lammps_output["generic"]["positions"][i],
+                    indices=pyiron_lammps_output["generic"]["indices"][i],
+                    species_lists=species_lists,
+                )
             )
-            atoms_list.append(atoms)
-        lammps_EngineOutput.final_structure = atoms_list[-1]
-        if isLineInFile.node_function(
+
+        converged = isLineInFile.node_function(
             filepath=os.path.join(working_directory, log_lammps_file_name),
             line=log_lammps_convergence_printout,
             exact_match=False,
-        ):
-            # print(os.path.join(working_directory, lammps_log_filepath), convergence_printout)
-            converged = True
-        else:
-            converged = False
-        lammps_EngineOutput.final_results = pyiron_lammps_output
-        lammps_EngineOutput.convergence = converged
-        lammps_EngineOutput.final_energy = pyiron_lammps_output["generic"][
-            "energy_tot"
-        ][-1]
-        lammps_EngineOutput.final_forces = pyiron_lammps_output["generic"]["forces"][-1]
-        lammps_EngineOutput.final_stress = pyiron_lammps_output["generic"]["pressures"][
-            -1
-        ]
-        lammps_EngineOutput.final_volume = atoms.get_volume()
-        lammps_EngineOutput.energies = pyiron_lammps_output["generic"]["energy_tot"]
-        lammps_EngineOutput.forces = pyiron_lammps_output["generic"]["forces"]
-        lammps_EngineOutput.stresses = pyiron_lammps_output["generic"]["pressures"]
-        lammps_EngineOutput.structures = atoms_list
-        lammps_EngineOutput.n_ionic_steps = pyiron_lammps_output["generic"]["steps"]
+        )
+
+        final_atoms = atoms_list[-1]
+        energies_traj = pyiron_lammps_output["generic"]["energy_tot"]
+        forces_traj = pyiron_lammps_output["generic"]["forces"]
+        stresses_traj = pyiron_lammps_output["generic"]["pressures"]
+
+        # pyiron_lammps's "generic" dict exposes per-step counters under
+        # either "steps" (older) or "step" (newer) — fall back to the
+        # trajectory length so we don't crash on a key rename.
+        generic = pyiron_lammps_output["generic"]
+        n_ionic_steps = generic.get("steps", generic.get("step", len(atoms_list)))
+
+        lammps_EngineOutput = EngineOutput(
+            final_structure=final_atoms,
+            final_energy=energies_traj[-1],
+            converged=bool(converged),
+            final_forces=forces_traj[-1],
+            final_stress=stresses_traj[-1],  # 3x3 stress tensor
+            final_volume=final_atoms.get_volume(),
+            energies=energies_traj,
+            forces=forces_traj,
+            stresses=stresses_traj,
+            structures=atoms_list,
+            n_ionic_steps=n_ionic_steps,
+        )
     else:
         try:
             lammps_EngineOutput = _parser_fn(**_parser_fn_kwargs)

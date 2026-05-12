@@ -3,7 +3,7 @@ import tempfile
 import unittest
 
 from ase.build import bulk
-from pyiron_workflow_atomistics.dataclass_storage import CalcInputStatic
+from pyiron_workflow_atomistics.engine import CalcInputStatic
 
 from pyiron_workflow_lammps.engine import LammpsEngine
 
@@ -29,29 +29,30 @@ class TestLammpsIntegration(unittest.TestCase):
         self.assertIn("minimize 0 0 0 0", static_script)
 
         # Test minimization mode
-        from pyiron_workflow_atomistics.dataclass_storage import CalcInputMinimize
+        from pyiron_workflow_atomistics.engine import CalcInputMinimize
 
         min_input = CalcInputMinimize(
             energy_convergence_tolerance=1e-6,
             force_convergence_tolerance=1e-5,
             max_iterations=1000,
-            max_evaluations=2000,
             relax_cell=False,
         )
         min_engine = LammpsEngine(
-            EngineInput=min_input, working_directory=self.temp_dir
+            EngineInput=min_input,
+            working_directory=self.temp_dir,
+            max_evaluations=2000,
         )
         min_script = min_engine._build_script(self.structure)
         self.assertIn("minimize 1e-06 1e-05 1000 2000", min_script)
 
         # Test MD mode
-        from pyiron_workflow_atomistics.dataclass_storage import CalcInputMD
+        from pyiron_workflow_atomistics.engine import CalcInputMD
 
         md_input = CalcInputMD(
             mode="NVT",
             temperature=300,
             thermostat="nose-hoover",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,

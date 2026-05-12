@@ -5,7 +5,7 @@ import unittest
 
 from ase import Atom
 from ase.build import bulk
-from pyiron_workflow_atomistics.dataclass_storage import (
+from pyiron_workflow_atomistics.engine import (
     CalcInputMD,
     CalcInputMinimize,
     CalcInputStatic,
@@ -40,10 +40,13 @@ class TestLammpsEngine(unittest.TestCase):
             energy_convergence_tolerance=1e-6,
             force_convergence_tolerance=1e-5,
             max_iterations=1000,
-            max_evaluations=2000,
             relax_cell=False,
         )
-        engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
+        engine = LammpsEngine(
+            EngineInput=engine_input,
+            working_directory=self.temp_dir,
+            max_evaluations=2000,
+        )
 
         self.assertEqual(engine.mode, "minimize")
         self.assertEqual(engine.EngineInput.energy_convergence_tolerance, 1e-6)
@@ -55,7 +58,7 @@ class TestLammpsEngine(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="nose-hoover",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -130,10 +133,13 @@ class TestLammpsEngine(unittest.TestCase):
             energy_convergence_tolerance=1e-6,
             force_convergence_tolerance=1e-5,
             max_iterations=1000,
-            max_evaluations=2000,
             relax_cell=False,
         )
-        engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
+        engine = LammpsEngine(
+            EngineInput=engine_input,
+            working_directory=self.temp_dir,
+            max_evaluations=2000,
+        )
 
         script = engine._build_script(self.structure)
 
@@ -147,10 +153,13 @@ class TestLammpsEngine(unittest.TestCase):
             energy_convergence_tolerance=1e-6,
             force_convergence_tolerance=1e-5,
             max_iterations=1000,
-            max_evaluations=2000,
             relax_cell=True,
         )
-        engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
+        engine = LammpsEngine(
+            EngineInput=engine_input,
+            working_directory=self.temp_dir,
+            max_evaluations=2000,
+        )
 
         script = engine._build_script(self.structure)
 
@@ -177,7 +186,7 @@ class TestLammpsEngine(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="nose-hoover",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -199,7 +208,7 @@ class TestLammpsEngine(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="berendsen",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -218,7 +227,7 @@ class TestLammpsEngine(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="andersen",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -242,14 +251,14 @@ class TestLammpsEngine(unittest.TestCase):
             n_ionic_steps=1000,
             n_print=100,
             seed=12345,
-            delta_temp=10.0,
         )
         engine = LammpsEngine(EngineInput=engine_input, working_directory=self.temp_dir)
 
         script = engine._build_script(self.structure)
 
-        # Check NVT temp/rescale content
-        self.assertIn("fix 1 all temp/rescale 100 300 300 10.0 units box", script)
+        # Check NVT temp/rescale content (delta_temp field removed upstream;
+        # engine renders 0.0 fallback).
+        self.assertIn("fix 1 all temp/rescale 100 300 300 0.0 units box", script)
 
     def test_build_script_md_nvt_csvr(self):
         """Test script building for NVT MD with CSVR thermostat."""
@@ -257,7 +266,7 @@ class TestLammpsEngine(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="temp/csvr",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -276,7 +285,7 @@ class TestLammpsEngine(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="langevin",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -297,7 +306,7 @@ class TestLammpsEngine(unittest.TestCase):
             temperature=300,
             pressure=1e5,  # 1 bar
             thermostat="nose-hoover",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             pressure_damping_timescale=1.0,
             time_step=0.001,
             n_ionic_steps=1000,
@@ -318,7 +327,7 @@ class TestLammpsEngine(unittest.TestCase):
             temperature=300,
             pressure=1e5,
             thermostat="berendsen",  # Not supported for NPT
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -356,7 +365,7 @@ class TestLammpsEngine(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="unsupported",
-            temperature_damping_timescale=0.1,
+            thermostat_time_constant=0.1,
             time_step=0.001,
             n_ionic_steps=1000,
             n_print=100,
@@ -467,6 +476,41 @@ class TestLammpsEngine(unittest.TestCase):
         script = engine._build_script(structure)
 
         self.assertIn("boundary p p f", script)
+
+    def test_build_script_minimize_max_iterations_override_warns(self):
+        """Engine-level max_iterations must override EngineInput.max_iterations
+        with a RuntimeWarning (engine.py:178-182).
+        """
+        import warnings
+
+        engine_input = CalcInputMinimize(
+            energy_convergence_tolerance=1e-6,
+            force_convergence_tolerance=1e-5,
+            max_iterations=500,
+            relax_cell=False,
+        )
+        engine = LammpsEngine(
+            EngineInput=engine_input,
+            working_directory=self.temp_dir,
+            max_iterations=9999,
+            max_evaluations=2000,
+        )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            script = engine._build_script(self.structure)
+
+        # The override warning must have been raised.
+        override_warnings = [
+            w
+            for w in caught
+            if issubclass(w.category, RuntimeWarning)
+            and "max_iterations" in str(w.message)
+            and "takes precedence" in str(w.message)
+        ]
+        self.assertEqual(len(override_warnings), 1)
+        # The script must use the engine-level override, not the EngineInput value.
+        self.assertIn("minimize 1e-06 1e-05 9999 2000", script)
 
 
 if __name__ == "__main__":

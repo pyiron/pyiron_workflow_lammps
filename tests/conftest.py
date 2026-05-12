@@ -105,7 +105,7 @@ def mock_engine_output():
         "final_forces": np.zeros((2, 3)),
         "final_stress": np.zeros((3, 3)),
     }
-    output.convergence = True
+    output.converged = True
     return output
 
 
@@ -124,7 +124,7 @@ def mock_engine_outputs(mock_engine_output):
             "final_forces": np.zeros((2, 3)),
             "final_stress": np.zeros((3, 3)),
         }
-        output.convergence = True
+        output.converged = True
         outputs.append(output)
     return outputs
 

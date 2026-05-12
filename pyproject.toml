@@ -17,7 +17,8 @@ classifiers = [
     "Topic :: Scientific/Engineering",
     "License :: OSI Approved :: BSD License",
     "Intended Audience :: Science/Research",
-    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
@@ -25,11 +26,17 @@ classifiers = [
 dependencies = [
     "numpy==1.26.4",
     "pandas==2.3.1",
-    "pyiron-workflow==0.15.2",
-    "pyiron-workflow-atomistics==0.0.4",
-    "pyiron-lammps==0.4.6",
+    "matplotlib==3.10.9",
     "ase==3.26.0",
+    "scipy==1.16.1",
+    "pyiron-workflow==0.15.6",
+    "pyiron-workflow-atomistics==0.0.6",
     "pymatgen==2025.6.14",
+    "pyiron_snippets==1.2.1",
+    "scikit-learn==1.7.2",
+    "lz-GB-code==0.1.0",
+    "tqdm==4.67.3",
+    "pyiron-lammps==0.4.6",
 ]
 dynamic = ["version"]
 authors = [
@@ -76,7 +83,7 @@ include = ["pyiron_workflow_lammps*"]
 attr = "pyiron_workflow_lammps.__version__"
 
 [tool.ruff]
-exclude = ["docs", "notebooks", "setup.py", "_version.py"]
+exclude = ["docs", "notebooks", "setup.py", "_version.py", ".github"]
 
 [tool.ruff.lint]
 select = [
@@ -102,6 +109,20 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "pyiron_workflow_lammps/__init__.py" = ["F401"]
+# Pre-existing patterns in modules carried over from before the Engine
+# Protocol migration. Lint them in-place rather than rewriting moved code:
+#   B028 — warnings.warn without explicit stacklevel
+#   ERA001 — commented-out code (mostly debug prints)
+#   PLC0415 — non-top-level imports (intentional for circular-import avoidance)
+#   B006 — mutable default args (in helper signatures, behavior-preserving)
+#   PLR0915, PLR0912 — long function bodies (parse_LammpsOutput etc.)
+"pyiron_workflow_lammps/engine.py" = ["B028", "ERA001", "PLC0415"]
+"pyiron_workflow_lammps/generic.py" = ["B006", "ERA001", "PLC0415"]
+"pyiron_workflow_lammps/lammps.py" = ["B028", "ERA001", "PLC0415", "B006", "PLR0915", "PLR0912", "B007", "SIM108", "SIM102", "B904", "F841"]
+# Pre-existing test debris (commented-out experiments, lazy imports for
+# heavy deps, lambda-as-var, blind pytest.raises(Exception), unused locals
+# in expectation-only assertions, etc.).
+"tests/**" = ["ERA001", "PLC0415", "E731", "B017", "F841", "B007"]
 
 [tool.black]
 extend-exclude = '''
