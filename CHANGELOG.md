@@ -4,7 +4,15 @@ All notable changes to `pyiron_workflow_lammps` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: PEP 440 via `versioneer`.
 
-## [0.1.0] — 2026-05-12
+## [0.1.0] — 2026-05-13
+
+### Removed (breaking)
+
+- **Windows support dropped.** `conda-forge` ships no Windows build of
+  `lammps=2024.08.29` (the pinned version), so the CI matrix can never
+  solve. The `Operating System :: OS Independent` classifier is replaced
+  with explicit `POSIX :: Linux` + `MacOS` entries. Users on Windows
+  should run via WSL2.
 
 ### Changed (breaking)
 
