@@ -247,7 +247,7 @@ class TestParseLammpsOutput(unittest.TestCase):
         )()
 
         self.assertIsNotNone(result)
-        self.assertTrue(result.convergence)
+        self.assertTrue(result.converged)
         self.assertEqual(result.final_energy, np.float64(-454.367609882893))
 
     def test_parse_lammps_output_success_default_filename(self):
@@ -262,7 +262,7 @@ class TestParseLammpsOutput(unittest.TestCase):
         )()
 
         self.assertIsNotNone(result)
-        self.assertTrue(result.convergence)
+        self.assertTrue(result.converged)
         self.assertEqual(result.final_energy, np.float64(-454.367609882893))
 
     def test_parse_lammps_output_success_unconverged(self):
@@ -278,7 +278,7 @@ class TestParseLammpsOutput(unittest.TestCase):
         )()
 
         self.assertIsNotNone(result)
-        self.assertFalse(result.convergence)
+        self.assertFalse(result.converged)
         self.assertEqual(result.final_energy, np.float64(-454.367609882893))
 
     def test_parse_lammps_output_missing_files(self):

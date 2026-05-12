@@ -141,6 +141,12 @@ def parse_LammpsOutput(
         forces_traj = pyiron_lammps_output["generic"]["forces"]
         stresses_traj = pyiron_lammps_output["generic"]["pressures"]
 
+        # pyiron_lammps's "generic" dict exposes per-step counters under
+        # either "steps" (older) or "step" (newer) — fall back to the
+        # trajectory length so we don't crash on a key rename.
+        generic = pyiron_lammps_output["generic"]
+        n_ionic_steps = generic.get("steps", generic.get("step", len(atoms_list)))
+
         lammps_EngineOutput = EngineOutput(
             final_structure=final_atoms,
             final_energy=energies_traj[-1],
@@ -152,7 +158,7 @@ def parse_LammpsOutput(
             forces=forces_traj,
             stresses=stresses_traj,
             structures=atoms_list,
-            n_ionic_steps=pyiron_lammps_output["generic"]["steps"],
+            n_ionic_steps=n_ionic_steps,
         )
     else:
         try:
