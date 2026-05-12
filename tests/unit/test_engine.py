@@ -5,7 +5,7 @@ import unittest
 
 from ase import Atom
 from ase.build import bulk
-from pyiron_workflow_atomistics.dataclass_storage import (
+from pyiron_workflow_atomistics.engine import (
     CalcInputMD,
     CalcInputMinimize,
     CalcInputStatic,

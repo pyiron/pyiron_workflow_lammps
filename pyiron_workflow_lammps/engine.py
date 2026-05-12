@@ -6,16 +6,15 @@ from dataclasses import dataclass, field
 from typing import Any, Literal
 
 from ase import Atoms
-from pyiron_workflow_atomistics.dataclass_storage import (
+from pyiron_workflow_atomistics.engine import (
     CalcInputMD,
     CalcInputMinimize,
     CalcInputStatic,
-    Engine,
 )
 
 
 @dataclass
-class LammpsEngine(Engine):
+class LammpsEngine:
     """
     Unified LAMMPS Engine using InputCalc dataclasses directly to build scripts.
     Mode is inferred from EngineInput by checking key attributes; boilerplate defaults

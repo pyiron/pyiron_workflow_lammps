@@ -6,7 +6,7 @@ import unittest
 
 import numpy as np
 from ase.build import bulk
-from pyiron_workflow_atomistics.dataclass_storage import CalcInputStatic
+from pyiron_workflow_atomistics.engine import CalcInputStatic
 
 from pyiron_workflow_lammps.engine import LammpsEngine
 from pyiron_workflow_lammps.lammps import (

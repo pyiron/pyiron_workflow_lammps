@@ -85,7 +85,7 @@ def parse_LammpsOutput(
 
     from ase.io.lammpsdata import read_lammps_data
     from pyiron_lammps import parse_lammps_output_files
-    from pyiron_workflow_atomistics.dataclass_storage import EngineOutput
+    from pyiron_workflow_atomistics.engine import EngineOutput
 
     from pyiron_workflow_lammps.generic import isLineInFile
 
