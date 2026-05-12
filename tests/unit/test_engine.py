@@ -477,6 +477,41 @@ class TestLammpsEngine(unittest.TestCase):
 
         self.assertIn("boundary p p f", script)
 
+    def test_build_script_minimize_max_iterations_override_warns(self):
+        """Engine-level max_iterations must override EngineInput.max_iterations
+        with a RuntimeWarning (engine.py:178-182).
+        """
+        import warnings
+
+        engine_input = CalcInputMinimize(
+            energy_convergence_tolerance=1e-6,
+            force_convergence_tolerance=1e-5,
+            max_iterations=500,
+            relax_cell=False,
+        )
+        engine = LammpsEngine(
+            EngineInput=engine_input,
+            working_directory=self.temp_dir,
+            max_iterations=9999,
+            max_evaluations=2000,
+        )
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            script = engine._build_script(self.structure)
+
+        # The override warning must have been raised.
+        override_warnings = [
+            w
+            for w in caught
+            if issubclass(w.category, RuntimeWarning)
+            and "max_iterations" in str(w.message)
+            and "takes precedence" in str(w.message)
+        ]
+        self.assertEqual(len(override_warnings), 1)
+        # The script must use the engine-level override, not the EngineInput value.
+        self.assertIn("minimize 1e-06 1e-05 9999 2000", script)
+
 
 if __name__ == "__main__":
     unittest.main()
