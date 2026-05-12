@@ -31,9 +31,7 @@ def _install_fake_pyiron_lammps(write_fn=None, parse_fn=None):
     """
     fake = types.ModuleType("pyiron_lammps")
     fake.write_lammps_structure = write_fn if write_fn is not None else MagicMock()
-    fake.parse_lammps_output_files = (
-        parse_fn if parse_fn is not None else MagicMock()
-    )
+    fake.parse_lammps_output_files = parse_fn if parse_fn is not None else MagicMock()
     sys.modules["pyiron_lammps"] = fake
     return fake
 
