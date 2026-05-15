@@ -47,10 +47,6 @@ extensions = [
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
 
-nbsphinx_thumbnails = {
-    "source/notebooks/example": "_static/pyiron-logo-dark.png",
-}
-
 # The suffix of source filenames.
 # The suffix of source filenames.
 source_suffix = {".rst": "restructuredtext", ".md": "markdown"}
