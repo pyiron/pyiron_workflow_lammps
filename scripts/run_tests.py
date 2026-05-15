@@ -11,6 +11,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+
 
 def run_pytest_tests(verbose=False, coverage=False, specific_file=None):
     """Run tests using pytest."""
@@ -28,13 +30,13 @@ def run_pytest_tests(verbose=False, coverage=False, specific_file=None):
         cmd.append("tests/unit/")
 
     print(f"Running command: {' '.join(cmd)}")
-    result = subprocess.run(cmd, check=False, cwd=Path(__file__).parent)
+    result = subprocess.run(cmd, check=False, cwd=PROJECT_ROOT)
     return result.returncode
 
 
 def run_unittest_suite():
     """Run tests using the unittest test suite."""
-    test_suite_path = Path(__file__).parent / "tests" / "unit" / "test_suite.py"
+    test_suite_path = PROJECT_ROOT / "tests" / "unit" / "test_suite.py"
 
     if not test_suite_path.exists():
         print(f"Error: Test suite not found at {test_suite_path}")
@@ -80,15 +82,14 @@ Examples:
 
     args = parser.parse_args()
 
-    # Check if we're in the right directory
-    if not Path("pyproject.toml").exists():
-        print("Error: Please run this script from the project root directory")
+    # Sanity-check that we found the project layout we expect.
+    if not (PROJECT_ROOT / "pyproject.toml").exists():
+        print(f"Error: pyproject.toml not found at {PROJECT_ROOT}")
         print("Current directory:", os.getcwd())
         return 1
 
-    # Check if tests directory exists
-    if not Path("tests/unit").exists():
-        print("Error: Tests directory not found")
+    if not (PROJECT_ROOT / "tests" / "unit").exists():
+        print(f"Error: Tests directory not found at {PROJECT_ROOT / 'tests' / 'unit'}")
         return 1
 
     print("=" * 60)
