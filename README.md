@@ -93,9 +93,11 @@ print(out.final_energy, out.converged, out.n_ionic_steps)
 ```
 
 A more complete walkthrough — minimise → NVT(langevin) → NPT(nose-hoover) —
-lives in [`notebooks/EnginePrototype_lammps.ipynb`](notebooks/EnginePrototype_lammps.ipynb).
-The bundled `notebooks/Al-Fe.eam.fs` potential lets it run end-to-end against
-any LAMMPS build with the `MANYBODY` package.
+lives in [`notebooks/example.ipynb`](notebooks/example.ipynb), committed
+with the executed cell outputs (energy-trace plots inline) so the results
+are visible directly on GitHub. The bundled `notebooks/Al-Fe.eam.fs`
+potential lets it run end-to-end against any LAMMPS build with the
+`MANYBODY` package.
 
 ## Engine knobs worth knowing
 
