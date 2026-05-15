@@ -65,7 +65,7 @@ notebook = [
     "notebook>=6.0.0",
 ]
 cluster = [
-    "pysqa==0.3.0",
+    "pysqa==0.4.1",
     "h5py==3.14.0",
 ]
 
