@@ -25,10 +25,10 @@ classifiers = [
 ]
 dependencies = [
     "numpy==1.26.4",
-    "pandas==3.0.2",
+    "pandas==3.0.0",
     "matplotlib==3.10.9",
-    "ase==3.28.0",
-    "scipy==1.17.1",
+    "ase==3.27.0",
+    "scipy==1.17.0",
     "pyiron-workflow==0.15.6",
     "pyiron-workflow-atomistics==0.0.7",
     "pymatgen==2026.5.4",
@@ -36,7 +36,7 @@ dependencies = [
     "scikit-learn==1.8.0",
     "lz-GB-code==0.1.0",
     "tqdm==4.67.3",
-    "pyiron-lammps==0.4.6",
+    "pyiron-lammps==0.5.4",
 ]
 dynamic = ["version"]
 authors = [
@@ -65,7 +65,7 @@ notebook = [
     "notebook>=6.0.0",
 ]
 cluster = [
-    "pysqa==0.3.0",
+    "pysqa==0.4.0",
     "h5py==3.14.0",
 ]
 
