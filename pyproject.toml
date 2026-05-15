@@ -30,7 +30,7 @@ dependencies = [
     "ase==3.28.0",
     "scipy==1.17.1",
     "pyiron-workflow==0.15.6",
-    "pyiron-workflow-atomistics==0.0.6",
+    "pyiron-workflow-atomistics==0.0.7",
     "pymatgen==2026.5.4",
     "pyiron_snippets==1.2.1",
     "scikit-learn==1.8.0",
