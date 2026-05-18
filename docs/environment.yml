@@ -9,7 +9,7 @@ dependencies:
 - versioneer
 - python>=3.11,<3.13
 - pip
-- numpy=1.26.4
+- numpy=2.4.5
 - ase=3.27.0
 - pymatgen=2026.5.4
 - pyiron_workflow=0.15.6
