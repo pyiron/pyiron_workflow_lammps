@@ -4,7 +4,7 @@ dependencies:
 - python>=3.11,<3.13
 - pip
 - numpy=1.26.4
-- ase=3.27.0
+- ase=3.28.0
 - pymatgen=2026.5.4
 - pyiron_workflow=0.15.6
 - pyiron_lammps=0.5.4
