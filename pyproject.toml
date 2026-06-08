@@ -33,7 +33,7 @@ dependencies = [
     "pyiron-workflow-atomistics==0.0.7",
     "pymatgen==2026.5.4",
     "pyiron_snippets==1.2.1",
-    "scikit-learn==1.8.0",
+    "scikit-learn==1.9.0",
     "lz-GB-code==0.1.0",
     "tqdm==4.67.3",
     "lammpsparser==0.0.7",
