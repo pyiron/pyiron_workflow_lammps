@@ -35,7 +35,7 @@ dependencies = [
     "pyiron_snippets==1.2.1",
     "scikit-learn==1.8.0",
     "lz-GB-code==0.1.0",
-    "tqdm==4.67.3",
+    "tqdm==4.68.1",
     "pyiron-lammps==0.5.4",
 ]
 dynamic = ["version"]
