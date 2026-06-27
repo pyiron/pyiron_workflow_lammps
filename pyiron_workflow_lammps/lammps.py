@@ -119,14 +119,21 @@ def parse_LammpsOutput(
             lammps_dump_filepath=os.path.join(working_directory, dump_out_file_name),
         )
         # Walk the per-step pyiron_lammps_output and build trajectory + finals.
+        # Attach per-atom velocities when present so each trajectory frame carries
+        # momenta (needed for kinetic temperature in coexistence analyses).
+        generic_traj = pyiron_lammps_output["generic"]
+        velocities_traj = generic_traj.get("velocities")
         atoms_list = []
-        for i in range(len(pyiron_lammps_output["generic"]["cells"])):
+        for i in range(len(generic_traj["cells"])):
             atoms_list.append(
                 arrays_to_ase_atoms(
-                    cells=pyiron_lammps_output["generic"]["cells"][i],
-                    positions=pyiron_lammps_output["generic"]["positions"][i],
-                    indices=pyiron_lammps_output["generic"]["indices"][i],
+                    cells=generic_traj["cells"][i],
+                    positions=generic_traj["positions"][i],
+                    indices=generic_traj["indices"][i],
                     species_lists=species_lists,
+                    velocities=(
+                        velocities_traj[i] if velocities_traj is not None else None
+                    ),
                 )
             )
 
@@ -219,9 +226,13 @@ def arrays_to_ase_atoms(
     indices: np.ndarray,  # (n_frames, n_atoms)
     species_lists: list[list[str]],  # e.g. {0:'Fe',1:'C'} or {1:'Fe',2:'C'}
     pbc: bool = True,
+    velocities: np.ndarray | None = None,  # (n_atoms, 3), optional per-atom velocities
 ) -> Atoms:
     """
     Convert the final frame of LAMMPS‐style arrays into an ASE Atoms.
+
+    If ``velocities`` is given, attach them so the frame carries momenta (used by
+    kinetic-temperature analyses of MD trajectories).
 
     Raises KeyError if any type in `indices` isn't a key in `species_map`.
     """
@@ -231,7 +242,14 @@ def arrays_to_ase_atoms(
     pos = positions
     types = indices
 
-    return Atoms(symbols=species_lists[-1], positions=pos, cell=cell, pbc=pbc)
+    atoms = Atoms(symbols=species_lists[-1], positions=pos, cell=cell, pbc=pbc)
+    if velocities is not None:
+        from ase import units as _u
+
+        # pyiron_lammps reports velocities in Å/fs; ASE Atoms use Å/(ASE time unit),
+        # so convert (else get_temperature() is ~1/units.fs**2 ≈ 103.6x too low).
+        atoms.set_velocities(np.asarray(velocities) / _u.fs)
+    return atoms
 
 
 @pwf.as_macro_node("lammps_output")
