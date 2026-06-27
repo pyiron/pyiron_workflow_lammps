@@ -244,7 +244,11 @@ def arrays_to_ase_atoms(
 
     atoms = Atoms(symbols=species_lists[-1], positions=pos, cell=cell, pbc=pbc)
     if velocities is not None:
-        atoms.set_velocities(np.asarray(velocities))
+        from ase import units as _u
+
+        # pyiron_lammps reports velocities in Å/fs; ASE Atoms use Å/(ASE time unit),
+        # so convert (else get_temperature() is ~1/units.fs**2 ≈ 103.6x too low).
+        atoms.set_velocities(np.asarray(velocities) / _u.fs)
     return atoms
 
 

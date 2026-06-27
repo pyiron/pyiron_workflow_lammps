@@ -197,10 +197,12 @@ class LammpsEngine:
         elif self.mode == "md":
             # MD run: velocities & thermostat/integrator
             md = self.EngineInput
+            # seed=None would be written literally as 'None' into LAMMPS commands.
+            seed = md.seed if md.seed is not None else 12345
             T0 = md.initial_temperature or md.temperature
             # Velocity init
             lines.append(
-                f"velocity all create {T0} {md.seed} mom yes rot yes dist gaussian"
+                f"velocity all create {T0} {seed} mom yes rot yes dist gaussian"
             )
             # Thermostat/integrator logic
             if md.mode == "NVE":
@@ -217,7 +219,7 @@ class LammpsEngine:
                     )
                 elif md.thermostat == "andersen":
                     lines.append(
-                        f"fix 1 all langevin {md.temperature} {md.temperature} {md.thermostat_time_constant} {md.seed}"
+                        f"fix 1 all langevin {md.temperature} {md.temperature} {md.thermostat_time_constant} {seed}"
                     )
                     lines.append("fix 2 all nve")
                 elif md.thermostat == "temp/rescale":
@@ -232,7 +234,7 @@ class LammpsEngine:
                 elif md.thermostat == "langevin":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} "
-                        f"{md.thermostat_time_constant} {md.seed}"
+                        f"{md.thermostat_time_constant} {seed}"
                     )
                     lines.append("fix 2 all nve")
                 else:

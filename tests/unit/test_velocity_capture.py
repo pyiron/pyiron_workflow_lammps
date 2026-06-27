@@ -1,4 +1,5 @@
 import numpy as np
+from ase import units
 
 from pyiron_workflow_lammps.lammps import arrays_to_ase_atoms
 
@@ -8,7 +9,7 @@ def test_arrays_to_ase_atoms_attaches_velocities():
     positions = np.array([[0.0, 0.0, 0.0], [1.0, 1.0, 1.0]])
     cells = np.eye(3) * 5.0
     indices = np.array([1, 1])
-    velocities = np.array([[0.1, 0.0, 0.0], [0.0, 0.2, 0.0]])
+    velocities = np.array([[0.1, 0.0, 0.0], [0.0, 0.2, 0.0]])  # pyiron units (Å/fs)
     atoms = arrays_to_ase_atoms(
         cells=cells,
         positions=positions,
@@ -18,7 +19,8 @@ def test_arrays_to_ase_atoms_attaches_velocities():
         velocities=velocities,
     )
     assert atoms.get_velocities() is not None
-    assert np.allclose(atoms.get_velocities(), velocities)
+    # stored in ASE velocity units = (Å/fs) / units.fs
+    assert np.allclose(atoms.get_velocities(), velocities / units.fs)
 
 
 def test_arrays_to_ase_atoms_without_velocities_is_zero():
