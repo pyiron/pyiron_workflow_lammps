@@ -52,8 +52,8 @@ class TestLammpsIntegration(unittest.TestCase):
             mode="NVT",
             temperature=300,
             thermostat="nose-hoover",
-            thermostat_time_constant=0.1,
-            time_step=0.001,
+            thermostat_time_constant=100.0,  # fs -> 0.1 ps under metal
+            time_step=1.0,  # fs -> 0.001 ps under metal
             n_ionic_steps=1000,
             n_print=100,
             seed=12345,
