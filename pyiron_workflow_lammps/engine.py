@@ -49,11 +49,16 @@ class LammpsEngine:
     input_script_compute_id: str = "eng"
     input_script_dump_every: int = 10
     input_script_dump_filename: str = "dump.out"
+    # 12 dump columns: id type (ints) + xsu ysu zsu fx fy fz vx vy vz c_eng (10 floats).
+    # The format line MUST have exactly 12 tokens (2 %d + 10 %20.15g). A previous
+    # default had 12 %20.15g (14 tokens total) — 2 too many — which makes LAMMPS
+    # SEGFAULT the first time a dump frame is written (i.e. at step 0 of any MD run;
+    # minimize escaped it only when it converged before a dump trigger fired).
     input_script_dump_modify: str = (
         'dump_modify 1 sort id format line "'
         "%d %d "
         "%20.15g %20.15g %20.15g %20.15g %20.15g "
-        '%20.15g %20.15g %20.15g %20.15g %20.15g %20.15g %20.15g"'
+        '%20.15g %20.15g %20.15g %20.15g %20.15g"'
     )
     input_script_thermo_style_fields: tuple[str, ...] = (
         "step",
@@ -200,6 +205,17 @@ class LammpsEngine:
             # seed=None would be written literally as 'None' into LAMMPS commands.
             seed = md.seed if md.seed is not None else 12345
             T0 = md.initial_temperature or md.temperature
+            # CalcInputMD time quantities are in FEMTOSECONDS (ASE/pwa convention), but
+            # LAMMPS interprets times in the `units` system's native unit: ps for `metal`,
+            # fs for `real`. Without this conversion `timestep 2.0` (meant as 2 fs) becomes
+            # 2 ps under metal -> a 1000x-too-large step that explodes the run after a few
+            # steps. Convert fs -> native time unit here.
+            _time_fac = {"metal": 1e-3, "real": 1.0, "si": 1e-15, "cgs": 1e-15}.get(
+                self.input_script_units, 1.0
+            )
+            dt = md.time_step * _time_fac
+            tdamp = md.thermostat_time_constant * _time_fac
+            pdamp = md.pressure_damping_timescale * _time_fac
             # Velocity init
             lines.append(
                 f"velocity all create {T0} {seed} mom yes rot yes dist gaussian"
@@ -211,15 +227,15 @@ class LammpsEngine:
             elif md.mode == "NVT":
                 if md.thermostat == "nose-hoover":
                     lines.append(
-                        f"fix 1 all nvt temp {md.temperature} {md.temperature} {md.thermostat_time_constant}"
+                        f"fix 1 all nvt temp {md.temperature} {md.temperature} {tdamp}"
                     )
                 elif md.thermostat == "berendsen":
                     lines.append(
-                        f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {md.thermostat_time_constant}"
+                        f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {tdamp}"
                     )
                 elif md.thermostat == "andersen":
                     lines.append(
-                        f"fix 1 all langevin {md.temperature} {md.temperature} {md.thermostat_time_constant} {seed}"
+                        f"fix 1 all langevin {md.temperature} {md.temperature} {tdamp} {seed}"
                     )
                     lines.append("fix 2 all nve")
                 elif md.thermostat == "temp/rescale":
@@ -229,12 +245,12 @@ class LammpsEngine:
                     )
                 elif md.thermostat == "temp/csvr":
                     lines.append(
-                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {md.thermostat_time_constant}"
+                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {tdamp}"
                     )
                 elif md.thermostat == "langevin":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} "
-                        f"{md.thermostat_time_constant} {seed}"
+                        f"{tdamp} {seed}"
                     )
                     lines.append("fix 2 all nve")
                 else:
@@ -245,14 +261,14 @@ class LammpsEngine:
                 if md.thermostat != "nose-hoover":
                     raise ValueError("NPT mode supports only 'nose-hoover' thermostat")
                 lines.append(
-                    f"fix 1 all npt temp {md.temperature} {md.temperature} {md.thermostat_time_constant} "
-                    f"iso {pressure_bar} {pressure_bar} {md.pressure_damping_timescale}"
+                    f"fix 1 all npt temp {md.temperature} {md.temperature} {tdamp} "
+                    f"iso {pressure_bar} {pressure_bar} {pdamp}"
                 )
             else:
                 raise ValueError(f"Unknown MD mode: {md.mode}")
 
             # Timestep, thermo frequency, and run
-            lines.append(f"timestep {md.time_step}")
+            lines.append(f"timestep {dt}")
             lines.append(f"thermo {md.n_print}")
             lines.append(f"run {md.n_ionic_steps}")
             # print(lines)
