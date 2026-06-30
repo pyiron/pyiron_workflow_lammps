@@ -9,7 +9,7 @@ dependencies:
 - pyiron_workflow=0.15.6
 - pyiron_lammps=0.5.4
 - pandas=3.0.0
-- scipy=1.17.0
+- scipy=1.17.1
 - matplotlib=3.10.9
 - scikit-learn=1.8.0
 - tqdm=4.67.3
