@@ -27,7 +27,7 @@ input, shell out, parse, return an `EngineOutput`.
   write_LammpsInput → shell → parse_LammpsOutput`. Used internally by
   `LammpsEngine.get_calculate_fn`, but also runnable standalone.
 - **`parse_LammpsOutput`** — reads `log.lammps` + `dump.out` via
-  `pyiron_lammps` and returns the canonical
+  `lammpsparser` and returns the canonical
   `pyiron_workflow_atomistics.engine.EngineOutput` with trajectories,
   per-step energies/forces/stresses, final structure, and a
   `converged` flag derived from the LAMMPS log.

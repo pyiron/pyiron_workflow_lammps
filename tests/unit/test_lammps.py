@@ -23,16 +23,16 @@ from pyiron_workflow_lammps.lammps import (
 )
 
 
-def _install_fake_pyiron_lammps(write_fn=None, parse_fn=None):
-    """Inject a fake `pyiron_lammps` module into sys.modules.
+def _install_fake_lammpsparser(write_fn=None, parse_fn=None):
+    """Inject a fake `lammpsparser` module into sys.modules.
 
     Returns the module so callers can swap out the `write_lammps_structure`
     or `parse_lammps_output_files` attributes per-test.
     """
-    fake = types.ModuleType("pyiron_lammps")
+    fake = types.ModuleType("lammpsparser")
     fake.write_lammps_structure = write_fn if write_fn is not None else MagicMock()
     fake.parse_lammps_output_files = parse_fn if parse_fn is not None else MagicMock()
-    sys.modules["pyiron_lammps"] = fake
+    sys.modules["lammpsparser"] = fake
     return fake
 
 
@@ -473,7 +473,7 @@ class TestLammpsJob(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     @unittest.skip(
-        "Skipped: pyiron_lammps 0.4.6's parse_lammps_output requires "
+        "Skipped: lammpsparser 0.4.6's parse_lammps_output requires "
         "a 'steps' key in the dump dict which is absent for a "
         "single-point (CalcInputStatic, `minimize 0 0 0 0`) run. "
         "Tracked separately from the Engine Protocol migration."
@@ -531,26 +531,26 @@ class TestLammpsCalculatorFn(unittest.TestCase):
 
 class TestWriteLammpsStructureMocked(unittest.TestCase):
     """Cover `write_LammpsStructure` (lammps.py:24-31) without needing a real
-    `pyiron_lammps` install — inject a fake module and assert pass-through.
+    `lammpsparser` install — inject a fake module and assert pass-through.
     """
 
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.structure = bulk("Fe", "bcc", a=2.87)
         self.potential_elements = ["Fe"]
-        self._saved_module = sys.modules.get("pyiron_lammps")
+        self._saved_module = sys.modules.get("lammpsparser")
         self.write_mock = MagicMock()
-        _install_fake_pyiron_lammps(write_fn=self.write_mock)
+        _install_fake_lammpsparser(write_fn=self.write_mock)
 
     def tearDown(self):
         if self._saved_module is not None:
-            sys.modules["pyiron_lammps"] = self._saved_module
+            sys.modules["lammpsparser"] = self._saved_module
         else:
-            sys.modules.pop("pyiron_lammps", None)
+            sys.modules.pop("lammpsparser", None)
         shutil.rmtree(self.temp_dir)
 
-    def test_write_lammps_structure_delegates_to_pyiron_lammps(self):
-        """write_LammpsStructure forwards args to pyiron_lammps.write_lammps_structure
+    def test_write_lammps_structure_delegates_to_lammpsparser(self):
+        """write_LammpsStructure forwards args to lammpsparser.write_lammps_structure
         and returns the working directory unchanged.
         """
         result = write_LammpsStructure(
@@ -573,7 +573,7 @@ class TestWriteLammpsStructureMocked(unittest.TestCase):
 
 class TestParseLammpsOutputDefaultParserMocked(unittest.TestCase):
     """Cover the default-parser branch of `parse_LammpsOutput`
-    (lammps.py:88-171) by stubbing the heavy `pyiron_lammps.parse_lammps_output_files`
+    (lammps.py:88-171) by stubbing the heavy `lammpsparser.parse_lammps_output_files`
     call. Uses the vendored `tests/resources/lammps.data` & `dump.out` for the
     cheap reads that the function still does directly (ase + pymatgen).
     """
@@ -595,7 +595,7 @@ class TestParseLammpsOutputDefaultParserMocked(unittest.TestCase):
         forces = [np.zeros((n_atoms, 3)), np.zeros((n_atoms, 3))]
         pressures = [np.zeros((3, 3)), np.zeros((3, 3))]
 
-        self.fake_pyiron_lammps_output = {
+        self.fake_lammpsparser_output = {
             "generic": {
                 "cells": cells,
                 "positions": positions,
@@ -607,15 +607,15 @@ class TestParseLammpsOutputDefaultParserMocked(unittest.TestCase):
             }
         }
 
-        self._saved_module = sys.modules.get("pyiron_lammps")
-        self.parse_mock = MagicMock(return_value=self.fake_pyiron_lammps_output)
-        _install_fake_pyiron_lammps(parse_fn=self.parse_mock)
+        self._saved_module = sys.modules.get("lammpsparser")
+        self.parse_mock = MagicMock(return_value=self.fake_lammpsparser_output)
+        _install_fake_lammpsparser(parse_fn=self.parse_mock)
 
     def tearDown(self):
         if self._saved_module is not None:
-            sys.modules["pyiron_lammps"] = self._saved_module
+            sys.modules["lammpsparser"] = self._saved_module
         else:
-            sys.modules.pop("pyiron_lammps", None)
+            sys.modules.pop("lammpsparser", None)
 
     def test_default_parser_builds_engine_output(self):
         """Default branch should build an EngineOutput from the per-step dict."""
@@ -660,11 +660,11 @@ class TestParseLammpsOutputDefaultParserMocked(unittest.TestCase):
         self.assertFalse(result.converged)
 
     def test_default_parser_step_key_fallback(self):
-        """`steps` may be renamed to `step` in newer pyiron_lammps;
+        """`steps` may be renamed to `step` in newer lammpsparser;
         consumer should fall back gracefully.
         """
         # Swap the key to exercise the .get("step", ...) fallback branch.
-        gen = self.fake_pyiron_lammps_output["generic"]
+        gen = self.fake_lammpsparser_output["generic"]
         gen["step"] = gen.pop("steps")
 
         result = parse_LammpsOutput(
@@ -680,7 +680,7 @@ class TestParseLammpsOutputDefaultParserMocked(unittest.TestCase):
 
     def test_custom_parser_branch(self):
         """Custom `_parser_fn` short-circuits the default parser; we just need
-        `pyiron_lammps` importable (which is true here via the fake module).
+        `lammpsparser` importable (which is true here via the fake module).
         """
         custom_output = MagicMock(name="custom_engine_output")
         custom_fn = MagicMock(return_value=custom_output)

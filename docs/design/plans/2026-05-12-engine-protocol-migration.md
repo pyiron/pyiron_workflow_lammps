@@ -364,14 +364,14 @@ In `pyiron_workflow_lammps/lammps.py`, locate the default-parser branch (the one
 ```python
         from pyiron_workflow_atomistics.engine import EngineOutput
 
-        # Walk the per-step pyiron_lammps_output and build trajectory + finals.
+        # Walk the per-step lammpsparser_output and build trajectory + finals.
         atoms_list = []
-        for i in range(len(pyiron_lammps_output["generic"]["cells"])):
+        for i in range(len(lammpsparser_output["generic"]["cells"])):
             atoms_list.append(
                 arrays_to_ase_atoms(
-                    cells=pyiron_lammps_output["generic"]["cells"][i],
-                    positions=pyiron_lammps_output["generic"]["positions"][i],
-                    indices=pyiron_lammps_output["generic"]["indices"][i],
+                    cells=lammpsparser_output["generic"]["cells"][i],
+                    positions=lammpsparser_output["generic"]["positions"][i],
+                    indices=lammpsparser_output["generic"]["indices"][i],
                     species_lists=species_lists,
                 )
             )
@@ -383,9 +383,9 @@ In `pyiron_workflow_lammps/lammps.py`, locate the default-parser branch (the one
         )
 
         final_atoms = atoms_list[-1]
-        energies_traj = pyiron_lammps_output["generic"]["energy_tot"]
-        forces_traj = pyiron_lammps_output["generic"]["forces"]
-        stresses_traj = pyiron_lammps_output["generic"]["pressures"]
+        energies_traj = lammpsparser_output["generic"]["energy_tot"]
+        forces_traj = lammpsparser_output["generic"]["forces"]
+        stresses_traj = lammpsparser_output["generic"]["pressures"]
 
         lammps_EngineOutput = EngineOutput(
             final_structure=final_atoms,
@@ -398,13 +398,13 @@ In `pyiron_workflow_lammps/lammps.py`, locate the default-parser branch (the one
             forces=forces_traj,
             stresses=stresses_traj,
             structures=atoms_list,
-            n_ionic_steps=pyiron_lammps_output["generic"]["steps"],
+            n_ionic_steps=lammpsparser_output["generic"]["steps"],
         )
 ```
 
 Notes:
 - `bool(converged)` is required: the upstream `EngineOutput.converged: bool` field rejects `None` or truthy non-bool values strictly; the `isLineInFile.node_function` return type is the safe coercion target.
-- `final_stress_voigt` is intentionally NOT set — the existing `pyiron_lammps_output["generic"]["pressures"]` is already a 3x3 tensor; the Voigt-flatten can wait for a follow-up if a downstream consumer needs it.
+- `final_stress_voigt` is intentionally NOT set — the existing `lammpsparser_output["generic"]["pressures"]` is already a 3x3 tensor; the Voigt-flatten can wait for a follow-up if a downstream consumer needs it.
 - `final_results` (the bespoke field on the old object that held the raw parser output dict) is dropped — it's not part of the canonical `EngineOutput` shape, and downstream consumers who need raw output can re-call the parser.
 
 - [ ] **Step 3: Re-import sanity-check**
@@ -435,7 +435,7 @@ git commit -m "feat(engine): return EngineOutput dataclass from parser
 parse_LammpsOutput now constructs the upstream
 pyiron_workflow_atomistics.engine.EngineOutput @dataclass with its
 three required fields (final_structure, final_energy, converged) and
-the relevant optional fields populated from pyiron_lammps_output.
+the relevant optional fields populated from lammpsparser_output.
 The no-args-then-mutate pattern is gone — the new strict @dataclass
 upstream rejects it.
 
@@ -609,7 +609,7 @@ dependencies:
   - ase=3.28.0
   - pymatgen=2026.5.4
   - pyiron_workflow=0.15.6
-  - pyiron_lammps=0.4.6
+  - lammpsparser=0.4.6
   - pandas=3.0.2
   - scipy=1.17.1
   - matplotlib=3.10.9
@@ -638,7 +638,7 @@ dependencies:
   - ase=3.28.0
   - pymatgen=2026.5.4
   - pyiron_workflow=0.15.6
-  - pyiron_lammps=0.4.6
+  - lammpsparser=0.4.6
   - pandas=3.0.2
   - scipy=1.17.1
   - matplotlib=3.10.9
