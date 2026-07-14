@@ -8,7 +8,7 @@ dependencies:
 - pymatgen=2026.5.4
 - pyiron_workflow=0.15.6
 - lammpsparser=0.0.7
-- pandas=3.0.0
+- pandas=3.0.3
 - scipy=1.17.1
 - matplotlib=3.10.9
 - scikit-learn=1.8.0
