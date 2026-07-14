@@ -27,7 +27,7 @@ dependencies = [
     "numpy==1.26.4",
     "pandas==3.0.0",
     "matplotlib==3.10.9",
-    "ase==3.27.0",
+    "ase==3.28.0",
     "scipy==1.17.1",
     "pyiron-workflow==0.15.6",
     "pyiron-workflow-atomistics==0.0.7",
