@@ -10,7 +10,7 @@ dependencies:
 - lammpsparser=0.0.7
 - pandas=3.0.0
 - scipy=1.17.0
-- matplotlib=3.10.9
+- matplotlib=3.11.0
 - scikit-learn=1.8.0
 - tqdm=4.67.3
 - lammps=2024.08.29
