@@ -13,7 +13,7 @@ dependencies:
   - scipy=1.17.0
   - matplotlib=3.10.9
   - scikit-learn=1.8.0
-  - tqdm=4.67.3
+  - tqdm=4.68.4
   - lammps=2024.08.29
   - pysqa=0.4.0
   - pip:
