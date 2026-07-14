@@ -19,7 +19,7 @@ def write_LammpsStructure(
     units="metal",
     file_name="lammps.data",
 ):
-    from pyiron_lammps import write_lammps_structure
+    from lammpsparser import write_lammps_structure
 
     write_lammps_structure(
         structure=structure,
@@ -84,7 +84,7 @@ def parse_LammpsOutput(
     import warnings
 
     from ase.io.lammpsdata import read_lammps_data
-    from pyiron_lammps import parse_lammps_output_files
+    from lammpsparser import parse_lammps_output_files
     from pyiron_workflow_atomistics.engine import EngineOutput
 
     from pyiron_workflow_lammps.generic import isLineInFile
@@ -101,7 +101,7 @@ def parse_LammpsOutput(
                 f"Error parsing LAMMPS output: {e}, you must provide a parser function (_parser_fn) and kwargs (_parser_fn_kwargs) if you want to use a custom parser."
             )
 
-        pyiron_lammps_output = parse_lammps_output_files(
+        lammpsparser_output = parse_lammps_output_files(
             working_directory=working_directory,
             structure=read_lammps_data(
                 os.path.join(working_directory, lammps_structure_filepath)
@@ -118,10 +118,10 @@ def parse_LammpsOutput(
             ),
             lammps_dump_filepath=os.path.join(working_directory, dump_out_file_name),
         )
-        # Walk the per-step pyiron_lammps_output and build trajectory + finals.
+        # Walk the per-step lammpsparser_output and build trajectory + finals.
         # Attach per-atom velocities when present so each trajectory frame carries
         # momenta (needed for kinetic temperature in coexistence analyses).
-        generic_traj = pyiron_lammps_output["generic"]
+        generic_traj = lammpsparser_output["generic"]
         velocities_traj = generic_traj.get("velocities")
         atoms_list = []
         for i in range(len(generic_traj["cells"])):
@@ -144,14 +144,14 @@ def parse_LammpsOutput(
         )
 
         final_atoms = atoms_list[-1]
-        energies_traj = pyiron_lammps_output["generic"]["energy_tot"]
-        forces_traj = pyiron_lammps_output["generic"]["forces"]
-        stresses_traj = pyiron_lammps_output["generic"]["pressures"]
+        energies_traj = lammpsparser_output["generic"]["energy_tot"]
+        forces_traj = lammpsparser_output["generic"]["forces"]
+        stresses_traj = lammpsparser_output["generic"]["pressures"]
 
-        # pyiron_lammps's "generic" dict exposes per-step counters under
+        # lammpsparser's "generic" dict exposes per-step counters under
         # either "steps" (older) or "step" (newer) — fall back to the
         # trajectory length so we don't crash on a key rename.
-        generic = pyiron_lammps_output["generic"]
+        generic = lammpsparser_output["generic"]
         n_ionic_steps = generic.get("steps", generic.get("step", len(atoms_list)))
 
         lammps_EngineOutput = EngineOutput(
@@ -246,7 +246,7 @@ def arrays_to_ase_atoms(
     if velocities is not None:
         from ase import units as _u
 
-        # pyiron_lammps reports velocities in Å/fs; ASE Atoms use Å/(ASE time unit),
+        # lammpsparser reports velocities in Å/fs; ASE Atoms use Å/(ASE time unit),
         # so convert (else get_temperature() is ~1/units.fs**2 ≈ 103.6x too low).
         atoms.set_velocities(np.asarray(velocities) / _u.fs)
     return atoms
