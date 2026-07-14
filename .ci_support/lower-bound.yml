@@ -9,13 +9,13 @@ dependencies:
   - pymatgen=2026.5.4
   - pyiron_workflow=0.15.6
   - lammpsparser=0.0.7
-  - pandas=3.0.0
+  - pandas=3.0.3
   - scipy=1.17.1
   - matplotlib=3.10.9
   - scikit-learn=1.8.0
   - tqdm=4.67.3
   - lammps=2024.08.29
-  - pysqa=0.4.0
+  - pysqa=0.4.2
   - pip:
       - pyiron-workflow-atomistics==0.0.7
       - pyiron-snippets==1.2.1
