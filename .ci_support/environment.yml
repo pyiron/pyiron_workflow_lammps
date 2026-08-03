@@ -7,7 +7,7 @@ dependencies:
 - ase=3.28.0
 - pymatgen=2026.5.4
 - pyiron_workflow=0.15.6
-- lammpsparser=0.0.7
+- lammpsparser=0.0.8
 - pandas=3.0.3
 - scipy=1.17.1
 - matplotlib=3.10.9
