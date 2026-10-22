@@ -1,137 +1,100 @@
-import os
-import sys
+"""Version handling.
+
+In a source tree (plain checkout or editable install) versioneer queries
+git, so ``__version__`` may legitimately be ``0+untagged...`` (no tags
+fetched) or ``0+unknown`` (no git at all). Only an installed build from a
+tagged sdist/wheel must carry a real version, which then also has to match
+the installed distribution metadata.
+"""
+
+import importlib.metadata
+import re
 import unittest
-from unittest.mock import MagicMock, patch
+from pathlib import Path
 
-# Add the module path to sys.path for testing
-sys.path.insert(
-    0, os.path.join(os.path.dirname(__file__), "..", "..", "pyiron_workflow_lammps")
-)
+import pyiron_workflow_lammps
+import pyiron_workflow_lammps._version as version_module
 
-from pyiron_workflow_lammps._version import (
-    HANDLERS,
-    LONG_VERSION_PY,
-    NotThisMethod,
-    get_config,
-    get_keywords,
-    register_vcs_handler,
-    run_command,
-)
+_PACKAGE_DIR = Path(pyiron_workflow_lammps.__file__).resolve().parent
+FROM_SOURCE_TREE = (_PACKAGE_DIR.parent / "pyproject.toml").is_file()
+
+# Built distributions carry versioneer's short static _version.py, which only
+# defines get_versions(); the git-querying template is only in the source tree.
+HAS_VERSIONEER_TEMPLATE = hasattr(version_module, "get_config")
 
 
 class TestVersion(unittest.TestCase):
-    """Test the version module functionality."""
+    def test_version_is_a_pep440ish_string(self):
+        version = pyiron_workflow_lammps.__version__
 
-    def test_get_keywords(self):
-        """Test get_keywords function."""
-        keywords = get_keywords()
+        self.assertIsInstance(version, str)
+        # "1.2.3", "0.1.0.post0.dev16", "0+untagged.5.gabc1234", "0+unknown"
+        self.assertRegex(version, r"^\d+(\.\d+)*([.+-]\S*)?$")
 
-        self.assertIsInstance(keywords, dict)
-        self.assertIn("refnames", keywords)
-        self.assertIn("full", keywords)
-        self.assertIn("date", keywords)
+    def test_get_versions(self):
+        versions = version_module.get_versions()
 
-        # These should be git format strings
-        self.assertEqual(keywords["refnames"], "$Format:%d$")
-        self.assertEqual(keywords["full"], "$Format:%H$")
-        self.assertEqual(keywords["date"], "$Format:%ci$")
+        for key in ("version", "full-revisionid", "dirty", "error", "date"):
+            self.assertIn(key, versions)
+        self.assertEqual(versions["version"], pyiron_workflow_lammps.__version__)
 
-    def test_get_config(self):
-        """Test get_config function."""
-        config = get_config()
+
+@unittest.skipIf(FROM_SOURCE_TREE, "imported from a source tree")
+class TestInstalledVersion(unittest.TestCase):
+    """An installed (non-editable) build must know its version."""
+
+    def test_version_is_resolved(self):
+        version = pyiron_workflow_lammps.__version__
+
+        self.assertNotEqual(version, "0+unknown")
+        self.assertIsNone(re.match(r"^0\+untagged", version), version)
+
+    def test_version_matches_metadata(self):
+        self.assertEqual(
+            pyiron_workflow_lammps.__version__,
+            importlib.metadata.version("pyiron_workflow_lammps"),
+        )
+
+    def test_version_file_is_static(self):
+        self.assertFalse(
+            HAS_VERSIONEER_TEMPLATE,
+            "installed _version.py is the versioneer template; "
+            "is versionfile_build set in [tool.versioneer]?",
+        )
+
+
+@unittest.skipUnless(
+    HAS_VERSIONEER_TEMPLATE, "built _version.py has no versioneer internals"
+)
+class TestVersioneerTemplate(unittest.TestCase):
+    def test_config_matches_tag_scheme(self):
+        config = version_module.get_config()
 
         self.assertEqual(config.VCS, "git")
         self.assertEqual(config.style, "pep440-pre")
         self.assertEqual(config.tag_prefix, "pyiron_workflow_lammps-")
-        self.assertEqual(config.parentdir_prefix, "pyiron_workflow_lammps")
         self.assertEqual(
             config.versionfile_source, "pyiron_workflow_lammps/_version.py"
         )
-        self.assertFalse(config.verbose)
 
-    def test_not_this_method_exception(self):
-        """Test NotThisMethod exception."""
-        with self.assertRaises(NotThisMethod):
-            raise NotThisMethod("Test exception")
+    def test_render_of_tagged_and_untagged_pieces(self):
+        pieces = {
+            "long": "a" * 40,
+            "short": "aaaaaaa",
+            "error": None,
+            "dirty": False,
+            "closest-tag": "0.2.0",
+            "distance": 0,
+            "date": None,
+            "branch": "main",
+        }
+        self.assertEqual(
+            version_module.render(pieces, "pep440-pre")["version"], "0.2.0"
+        )
 
-    def test_register_vcs_handler(self):
-        """Test register_vcs_handler decorator."""
-
-        @register_vcs_handler("test_vcs", "test_method")
-        def test_handler():
-            return "test_result"
-
-        self.assertIn("test_vcs", HANDLERS)
-        self.assertIn("test_method", HANDLERS["test_vcs"])
-        self.assertEqual(HANDLERS["test_vcs"]["test_method"], test_handler)
-
-    @patch("subprocess.Popen")
-    def test_run_command_success(self, mock_popen):
-        """Test run_command with successful execution."""
-        mock_process = MagicMock()
-        # return BYTES so .decode() in run_command works
-        mock_process.communicate.return_value = (b"test output", b"test error")
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
-
-        # your function expects (commands, args)
-        output, return_code = run_command(["echo"], ["test"])
-
-        self.assertEqual(output, "test output")
-        self.assertEqual(return_code, 0)
-        mock_popen.assert_called_once()
-
-    @patch("subprocess.Popen")
-    def test_run_command_failure(self, mock_popen):
-        """Test run_command with failed execution."""
-        mock_process = MagicMock()
-        # return BYTES so .decode() in run_command works
-        mock_process.communicate.return_value = (b"", b"error message")
-        mock_process.returncode = 1
-        mock_popen.return_value = mock_process
-
-        output, return_code = run_command(["invalid_command"], [])
-
-        self.assertIsNone(output)
-        self.assertEqual(return_code, 1)
-
-    @patch("subprocess.Popen")
-    def test_run_command_with_cwd(self, mock_popen):
-        """Test run_command with custom working directory."""
-        mock_process = MagicMock()
-        mock_process.communicate.return_value = (b"output", b"")
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
-
-        run_command(["echo"], ["test"], cwd="/test/directory")
-
-        mock_popen.assert_called_once()
-        call_args = mock_popen.call_args
-        self.assertEqual(call_args[1]["cwd"], "/test/directory")
-
-    @patch("subprocess.Popen")
-    def test_run_command_with_env(self, mock_popen):
-        """Test run_command with custom environment."""
-        mock_process = MagicMock()
-        mock_process.communicate.return_value = (b"output", b"")
-        mock_process.returncode = 0
-        mock_popen.return_value = mock_process
-
-        env_vars = {"TEST_VAR": "test_value"}
-        run_command(["echo"], ["test"], env=env_vars)
-
-        mock_popen.assert_called_once()
-        call_args = mock_popen.call_args
-        self.assertIn("TEST_VAR", call_args[1]["env"])
-        self.assertEqual(call_args[1]["env"]["TEST_VAR"], "test_value")
-
-    def test_long_version_py_initialization(self):
-        """Test LONG_VERSION_PY initialization."""
-        self.assertIsInstance(LONG_VERSION_PY, dict)
-
-    def test_handlers_initialization(self):
-        """Test HANDLERS initialization."""
-        self.assertIsInstance(HANDLERS, dict)
+        pieces.update({"closest-tag": None, "distance": 5})
+        untagged = version_module.render(pieces, "pep440-pre")["version"]
+        self.assertTrue(untagged.startswith("0"), untagged)
 
 
 if __name__ == "__main__":
