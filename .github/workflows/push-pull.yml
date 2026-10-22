@@ -9,21 +9,33 @@ on:
 
 jobs:
   pyiron:
-    uses: pyiron/actions/.github/workflows/push-pull.yml@actions-4.0.8
+    uses: pyiron/actions/.github/workflows/push-pull.yml@actions-4.2.1
     secrets: inherit
     with:
       do-coveralls: false
       do-codecov: true
-      # The test matrix supports up to four python versions
-      python-version-alt3: 'exclude'
-      python-version-alt2: 'exclude'
-      python-version-alt1: '3.11'
+      # The main leg (all runners) is 3.12; the alternates run on the main
+      # runner only. Together they cover requires-python (3.11-3.14).
       python-version: '3.12'
-      # conda-forge lammps=2024.08.29 has no Windows build; drop windows
-      # from the runner matrix so the conda solver doesn't kill the run.
-      # (runner-alt1 = windows-latest; runner-alt2 = macos-latest — keep mac.)
+      python-version-alt1: '3.11'
+      python-version-alt2: '3.13'
+      python-version-alt3: '3.14'
+      # conda-forge lammps has no Windows build; drop windows from the runner
+      # matrix so the conda solve doesn't kill the run.
+      # (runner-alt1 = windows-latest; runner-alt2 = macos-latest, kept.)
       runner-alt1: 'exclude'
-      # Test lower bounds:
+      # Lower-bound leg: solve .ci_support/lower-bound.yml (the floors the
+      # release publishes) on the oldest supported python and run the unit
+      # tests there, so a source change needing something newer than a floor
+      # fails CI. tests/unit is unittest-collectable; LAMMPS is not in that
+      # env, so the tests that run `lmp` skip.
       alternate-tests-env-files: .ci_support/lower-bound.yml
       alternate-tests-python-version: '3.11'
       alternate-tests-dir: tests/unit
+      # The notebook plots with matplotlib, which is not a package dependency;
+      # this env file adds it (also merged into .binder/environment.yml by
+      # commit-updated-env).
+      notebooks-env-files: .ci_support/environment.yml .ci_support/environment-notebooks.yml
+      # Execute notebooks from their own directory, as Jupyter/Binder do, so
+      # they can find the potential file bundled next to them.
+      notebooks-working-directory: notebooks
