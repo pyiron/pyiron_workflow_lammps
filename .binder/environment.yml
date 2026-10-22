@@ -1,21 +1,18 @@
 channels:
 - conda-forge
 dependencies:
-- python>=3.11,<3.13
+- python>=3.11,<3.15
 - pip
-- numpy=1.26.4
-- ase=3.28.0
-- pymatgen=2026.5.4
-- pyiron_workflow=0.15.6
-- lammpsparser=0.0.7
-- pandas=3.0.3
-- scipy=1.17.1
-- matplotlib=3.10.9
-- scikit-learn=1.8.0
-- tqdm=4.67.3
-- lammps=2024.08.29
-- pysqa=0.4.2
-- pip:
-  - pyiron-workflow-atomistics==0.0.7
-  - pyiron-snippets==1.2.1
-  - lz-GB-code==0.1.0
+- setuptools >=77
+- ase =3.29.0
+- flowrep =0.6.7
+- lammpsparser =0.0.10
+- numpy =2.4.6
+- pyiron_snippets =1.5.0
+- pyiron_workflow =0.20.3
+- pyiron-workflow-atomistics =0.3.0
+- pymatgen =2026.9.24
+- lammps =2025.07.22=*nompi*
+- pytest
+- pytest-cov
+- matplotlib-base
