@@ -208,12 +208,9 @@ def parse_LammpsOutput(
         final_atoms = atoms_list[-1]
         energies_traj = generic_traj["energy_pot"]
         forces_traj = generic_traj["forces"]
-        stresses_traj = generic_traj["pressures"]
-        rotation = np.asarray(prism.R)
-        if not np.allclose(rotation, np.eye(3), rtol=0.0, atol=1e-8):
-            # lammpsparser (<= 0.0.10) only applies its pressure rotation when
-            # the rotation is the identity, so pressures stay in LAMMPS' frame.
-            stresses_traj = rotation @ np.asarray(stresses_traj) @ rotation.T
+        stresses_traj = _pressures_in_reference_frame(
+            os.path.join(working_directory, log_lammps_file_name), units, prism
+        )
 
         # lammpsparser's "generic" dict holds the step numbers of the thermo
         # output under "steps" (older versions: "step"); the last one is the
@@ -247,6 +244,27 @@ def parse_LammpsOutput(
             )
 
     return lammps_EngineOutput
+
+
+def _pressures_in_reference_frame(log_path: str, units: str, prism) -> np.ndarray:
+    """Pressure tensors (pyiron units, GPa for ``metal``) in the input frame.
+
+    Built from the raw thermo columns rather than taken from lammpsparser's
+    ``pressures``: lammpsparser (<= 0.0.10) applies its frame rotation only
+    when the rotation is the identity, and compensating for that would
+    double-rotate once it is fixed upstream.
+    """
+    from lammpsparser.output_raw import parse_raw_lammps_log
+    from lammpsparser.units import UnitConverter
+
+    df = parse_raw_lammps_log(file_name=log_path)
+    order = ("Pxx", "Pxy", "Pxz", "Pxy", "Pyy", "Pyz", "Pxz", "Pyz", "Pzz")
+    pressures = np.stack([df[k] for k in order], axis=-1).reshape(-1, 3, 3)
+    pressures = UnitConverter(units).convert_array_to_pyiron_units(
+        pressures.astype("float64"), label="pressures"
+    )
+    rotation = np.asarray(prism.R)
+    return rotation @ pressures @ rotation.T
 
 
 def _cells_in_reference_basis(cells, reference: Atoms) -> np.ndarray:
