@@ -173,11 +173,9 @@ def test_minimize(tmp_path, lammps_executable, eam_potential, relax_cell):
     if relax_cell:
         assert volume_change > 1e-3
         # box/relax drives the pressure to input_script_relax_pressure (bar);
-        # final_stress is lammpsparser's pressure in GPa. NOTE: the current
-        # default is 1e4 bar = 1 GPa, not zero pressure; it predates the port
-        # and changing it awaits a decision. Pin the target explicitly so a
-        # change of the default shows up here.
-        assert engine.input_script_relax_pressure == 1e4
+        # final_stress is lammpsparser's pressure in GPa. The default is a
+        # zero-pressure relaxation (0.1.0 defaulted to 1e4 bar = 1 GPa).
+        assert engine.input_script_relax_pressure == 0.0
         target_gpa = engine.input_script_relax_pressure / 1e4
         assert np.mean(np.diag(out.final_stress)) == pytest.approx(target_gpa, abs=1e-2)
     else:

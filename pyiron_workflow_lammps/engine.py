@@ -83,7 +83,7 @@ class LammpsEngine:
     input_script_thermo_format: str = "%20.15g"
     input_script_thermo_every: int = 10
     input_script_min_style: str = "cg"
-    input_script_relax_pressure: float = 1e4
+    input_script_relax_pressure: float = 0.0
     input_script_relax_vmax: float = 0.001
     input_script_relax_type: Literal["iso", "aniso", "tri"] = "iso"
 

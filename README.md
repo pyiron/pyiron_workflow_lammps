@@ -27,7 +27,7 @@ or run it as a node with `pyiron_workflow.node(fn).run(**inputs)` /
   - `CalcInputStatic`: single-point energy (LAMMPS `run 0`)
   - `CalcInputMinimize`: `min_style cg` minimisation; with `relax_cell=True`
     also the cell, via `fix box/relax` towards `input_script_relax_pressure`
-    (default 1 GPa; see "Cell relaxation target pressure" below)
+    (default 0, i.e. a zero-pressure relaxation)
   - `CalcInputMD`: MD with `NVE`, `NVT` (nose-hoover, berendsen, langevin,
     andersen, temp/rescale, temp/csvr) or `NPT` (nose-hoover only; requires
     `pressure`, in Pa, else `ValueError`). Times in `CalcInputMD` are
@@ -230,7 +230,7 @@ arguments or attributes:
 | `potential_elements` | `None` | element order for `pair_coeff`; `None` means the structure's elements in order of first occurrence |
 | `input_script_min_style` | `"cg"` | minimiser |
 | `input_script_relax_type` | `"iso"` | `box/relax` mode (iso/aniso/tri) |
-| `input_script_relax_pressure` | `1e4` | `fix box/relax` target pressure for `relax_cell=True`, in the LAMMPS pressure unit (bar for `metal`): **1 GPa by default, not 0** |
+| `input_script_relax_pressure` | `0.0` | `fix box/relax` target pressure for `relax_cell=True`, in the LAMMPS pressure unit (bar for `metal`) |
 | `input_script_read_data_file` | `"lammps.data"` | structure file written and read with `read_data` |
 | `input_script_dump_filename` | `"dump.out"` | trajectory dump file |
 | `input_script_thermo_every` | `10` | thermo and dump interval of a minimisation (MD uses `n_print`) |
@@ -247,14 +247,16 @@ directory joined with `subdir`; a custom `calc_fn` or `parse_fn` carries over.
 
 `CalcInputMinimize(relax_cell=True)` adds
 `fix 1 all box/relax <input_script_relax_type> <input_script_relax_pressure>`.
-The default `input_script_relax_pressure=1e4` is 10 000 bar = **1 GPa** of
-hydrostatic pressure (compression positive) under `units metal`, so the cell
-is relaxed to a compressed state, not to zero pressure. For a zero-pressure
-relaxation set it explicitly:
+The default `input_script_relax_pressure=0.0` relaxes to zero pressure. The
+value is in the LAMMPS pressure unit (bar under `units metal`, compression
+positive); for example, to relax under 1 GPa of hydrostatic pressure:
 
 ```text
-LammpsEngine(EngineInput=CalcInputMinimize(relax_cell=True), input_script_relax_pressure=0.0, ...)
+LammpsEngine(EngineInput=CalcInputMinimize(relax_cell=True), input_script_relax_pressure=1e4, ...)
 ```
+
+0.1.0 defaulted to `1e4` bar (1 GPa); pass `input_script_relax_pressure=1e4`
+to reproduce its cell relaxations.
 
 ## Tests
 

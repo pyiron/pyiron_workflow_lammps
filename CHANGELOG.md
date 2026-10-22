@@ -30,6 +30,11 @@ since 0.1.0.
   `energy_pot`), the energy consistent with the forces, instead of `etotal`,
   which includes the kinetic energy in MD. Static and minimisation results
   are unchanged.
+- **Cell relaxations target zero pressure.** `LammpsEngine.input_script_relax_pressure`
+  defaults to `0.0` instead of `1e4`, which is 10 000 bar = 1 GPa of
+  hydrostatic compression under `units metal`, so `CalcInputMinimize(relax_cell=True)`
+  now relaxes to zero pressure like ASE. Pass `input_script_relax_pressure=1e4`
+  for the 0.1.0 behaviour.
 - **`n_ionic_steps` is an `int`**: the last LAMMPS step number, instead of the
   array of thermo steps.
 - **`LammpsEngine` is stateless.** `get_calculate_fn(structure)` builds the
@@ -150,11 +155,6 @@ since 0.1.0.
 - `temp/rescale` and `temp/csvr` are accepted by the engine although
   `CalcInputMD.thermostat`'s type hint lists only `nose-hoover`, `langevin`,
   `berendsen` and `andersen`.
-- `CalcInputMinimize(relax_cell=True)` relaxes the cell towards
-  `LammpsEngine.input_script_relax_pressure`, which defaults to `1e4` in the
-  LAMMPS pressure unit: 10 000 bar = **1 GPa** hydrostatic compression under
-  `units metal`, not zero pressure. This default is unchanged from 0.1.0;
-  set `input_script_relax_pressure=0.0` for a zero-pressure relaxation.
 
 ### Removed (breaking)
 

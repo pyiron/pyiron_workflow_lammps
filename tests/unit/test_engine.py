@@ -174,7 +174,7 @@ class TestLammpsEngine(unittest.TestCase):
         script = engine._build_script(self.structure)
 
         # Check cell relaxation fix
-        self.assertIn("fix 1 all box/relax iso 10000.000000 vmax 0.001", script)
+        self.assertIn("fix 1 all box/relax iso 0.000000 vmax 0.001", script)
 
     def test_build_script_md_nve(self):
         """Test script building for NVE MD."""
