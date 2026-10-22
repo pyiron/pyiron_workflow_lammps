@@ -18,6 +18,6 @@ dependencies:
 - pyiron_workflow =0.20.3
 - pyiron-workflow-atomistics =0.3.0
 - pymatgen =2026.9.24
-- lammps =2025.07.22=*nompi*
+- lammps =2025.07.22=*nompi_2
 - pytest
 - pytest-cov

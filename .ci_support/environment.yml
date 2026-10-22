@@ -21,7 +21,9 @@ dependencies:
   - pymatgen =2026.9.24
   # Not a Python dependency: the binary the integration tests run (`lmp`).
   # nompi keeps the runtime free of MPI launch quirks on the CI runners;
-  # every variant ships `lmp` with MANYBODY (eam/fs).
-  - lammps =2025.07.22=*nompi*
+  # every variant ships `lmp` with MANYBODY (eam/fs). Build 2: builds 4-6
+  # declare __glibc>=2.17 but link GLIBC_2.38, so `lmp` fails to load on
+  # ubuntu-22.04 (glibc 2.35); build 3 for py3.14 needs numpy>=2.5.1.
+  - lammps =2025.07.22=*nompi_2
   - pytest
   - pytest-cov
