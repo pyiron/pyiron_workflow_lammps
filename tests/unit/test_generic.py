@@ -1,8 +1,10 @@
 import os
 import shutil
+import tarfile
 import tempfile
+import threading
 import unittest
-from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import MagicMock, patch
 
 from pyiron_workflow_lammps.generic import (
@@ -16,35 +18,37 @@ from pyiron_workflow_lammps.generic import (
     isLineInFile,
     remove_dir,
     shell,
-    submit_to_slurm,
 )
+
+try:
+    import pyiron_workflow as pwf
+except ImportError:  # pragma: no cover - pyiron_workflow is optional here
+    pwf = None
+
+
+def _completed(stdout="output", stderr="", returncode=0):
+    proc = MagicMock()
+    proc.stdout = stdout
+    proc.stderr = stderr
+    proc.returncode = returncode
+    return proc
 
 
 class TestStorage(unittest.TestCase):
-    """Test the Storage class."""
-
     def test_convert_to_dict(self):
-        """Test _convert_to_dict method."""
-
         class TestClass:
             def __init__(self):
                 self.public_attr = "value"
                 self._private_attr = "private"
                 self.another_attr = 42
 
-        instance = TestClass()
-        result = Storage._convert_to_dict(instance)
+        result = Storage._convert_to_dict(TestClass())
 
-        expected = {"public_attr": "value", "another_attr": 42}
-        self.assertEqual(result, expected)
-        self.assertNotIn("_private_attr", result)
+        self.assertEqual(result, {"public_attr": "value", "another_attr": 42})
 
 
 class TestShellOutput(unittest.TestCase):
-    """Test the ShellOutput class."""
-
     def test_shell_output_attributes(self):
-        """Test ShellOutput attributes."""
         output = ShellOutput()
         output.stdout = "test output"
         output.stderr = "test error"
@@ -60,10 +64,7 @@ class TestShellOutput(unittest.TestCase):
 
 
 class TestVarType(unittest.TestCase):
-    """Test the VarType class."""
-
     def test_vartype_init(self):
-        """Test VarType initialization."""
         var = VarType(
             value=42,
             dat_type=int,
@@ -81,7 +82,6 @@ class TestVarType(unittest.TestCase):
         self.assertEqual(var.doc, "test documentation")
 
     def test_vartype_defaults(self):
-        """Test VarType with default values."""
         var = VarType()
 
         self.assertIsNone(var.value)
@@ -93,8 +93,6 @@ class TestVarType(unittest.TestCase):
 
 
 class TestFileObject(unittest.TestCase):
-    """Test the FileObject class."""
-
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
 
@@ -102,15 +100,14 @@ class TestFileObject(unittest.TestCase):
         shutil.rmtree(self.temp_dir)
 
     def test_fileobject_init_with_path(self):
-        """Test FileObject initialization with path only."""
-        file_obj = FileObject("test.txt")
+        missing = os.path.join(self.temp_dir, "test.txt")
+        file_obj = FileObject(missing)
 
-        self.assertEqual(file_obj.path, "test.txt")
+        self.assertEqual(file_obj.path, missing)
         self.assertEqual(file_obj.name, "test.txt")
         self.assertFalse(file_obj.is_file)
 
     def test_fileobject_init_with_directory(self):
-        """Test FileObject initialization with directory."""
         test_file = os.path.join(self.temp_dir, "test.txt")
         with open(test_file, "w") as f:
             f.write("test content")
@@ -122,460 +119,401 @@ class TestFileObject(unittest.TestCase):
         self.assertTrue(file_obj.is_file)
 
     def test_fileobject_repr(self):
-        """Test FileObject string representation."""
-        file_obj = FileObject("test.txt")
-        repr_str = repr(file_obj)
+        repr_str = repr(FileObject(os.path.join(self.temp_dir, "test.txt")))
 
         self.assertIn("FileObject", repr_str)
         self.assertIn("test.txt", repr_str)
-        self.assertIn("False", repr_str)  # is_file should be False
+        self.assertIn("False", repr_str)
 
 
 class TestShell(unittest.TestCase):
-    """Test the shell function."""
-
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    @patch("subprocess.run")
+    @patch("pyiron_workflow_lammps.generic.subprocess.run")
     def test_shell_basic(self, mock_run):
-        """Test basic shell command execution."""
-        mock_process = MagicMock()
-        mock_process.stdout = "test output"
-        mock_process.stderr = "test error"
-        mock_process.returncode = 0
-        mock_run.return_value = mock_process
+        mock_run.return_value = _completed("test output", "test error", 0)
 
-        result = shell("echo test", working_directory=self.temp_dir).run()
+        result = shell(command="echo test", working_directory=self.temp_dir)
 
         self.assertIsInstance(result, ShellOutput)
         self.assertEqual(result.stdout, "test output")
         self.assertEqual(result.stderr, "test error")
         self.assertEqual(result.return_code, 0)
-
         mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        self.assertEqual(call_args[0][0], ["echo test"])
-        self.assertEqual(call_args[1]["cwd"], self.temp_dir)
-        self.assertTrue(call_args[1]["shell"])
+        args, kwargs = mock_run.call_args
+        # shell=True needs a single command string
+        self.assertEqual(args[0], "echo test")
+        self.assertEqual(kwargs["cwd"], self.temp_dir)
+        self.assertTrue(kwargs["shell"])
 
-    @patch("subprocess.run")
+    @patch("pyiron_workflow_lammps.generic.subprocess.run")
     def test_shell_with_environment(self, mock_run):
-        """Test shell command with environment variables."""
-        mock_process = MagicMock()
-        mock_process.stdout = "output"
-        mock_process.stderr = "error"
-        mock_process.returncode = 0
-        mock_run.return_value = mock_process
+        mock_run.return_value = _completed()
 
-        env_vars = {"TEST_VAR": "test_value", "ANOTHER_VAR": "another_value"}
+        shell(
+            command="echo test",
+            working_directory=self.temp_dir,
+            environment={"TEST_VAR": "test_value", "NUMBER": 3},
+        )
 
-        result = shell(
-            "echo test", working_directory=self.temp_dir, environment=env_vars
-        ).run()
+        env = mock_run.call_args.kwargs["env"]
+        self.assertEqual(env["TEST_VAR"], "test_value")
+        self.assertEqual(env["NUMBER"], "3")
+        # The parent environment is inherited, not replaced.
+        self.assertIn("PATH", env)
 
-        mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        self.assertIn("TEST_VAR", call_args[1]["env"])
-        self.assertEqual(call_args[1]["env"]["TEST_VAR"], "test_value")
-
-    @patch("subprocess.run")
+    @patch("pyiron_workflow_lammps.generic.subprocess.run")
     def test_shell_with_arguments(self, mock_run):
-        """Test shell command with additional arguments."""
-        mock_process = MagicMock()
-        mock_process.stdout = "output"
-        mock_process.stderr = "error"
-        mock_process.returncode = 0
-        mock_run.return_value = mock_process
+        mock_run.return_value = _completed()
 
-        arguments = ["arg1", "arg2", "arg3"]
+        shell(
+            command="test_command",
+            working_directory=self.temp_dir,
+            arguments=["arg1", "arg2", 3],
+        )
 
-        result = shell(
-            "test_command", working_directory=self.temp_dir, arguments=arguments
-        ).run()
+        self.assertEqual(mock_run.call_args.args[0], "test_command arg1 arg2 3")
 
-        mock_run.assert_called_once()
-        call_args = mock_run.call_args
-        self.assertEqual(call_args[0][0], ["test_command", "arg1", "arg2", "arg3"])
-
-    @patch("subprocess.run")
+    @patch("pyiron_workflow_lammps.generic.subprocess.run")
     def test_shell_error_return_code(self, mock_run):
-        """Test shell command with error return code."""
-        mock_process = MagicMock()
-        mock_process.stdout = "output"
-        mock_process.stderr = "error message"
-        mock_process.returncode = 1
-        mock_run.return_value = mock_process
+        mock_run.return_value = _completed("output", "error message", 1)
 
-        result = shell("failing_command", working_directory=self.temp_dir).run()
+        result = shell(command="failing_command", working_directory=self.temp_dir)
 
         self.assertEqual(result.return_code, 1)
         self.assertEqual(result.stderr, "error message")
 
+    def test_shell_runs_in_working_directory_without_chdir(self):
+        cwd_before = os.getcwd()
+
+        result = shell(
+            command="pwd && echo $MY_VAR",
+            working_directory=self.temp_dir,
+            environment={"MY_VAR": "hello"},
+            after="ordering token, ignored",
+        )
+
+        self.assertEqual(result.return_code, 0)
+        lines = result.stdout.splitlines()
+        self.assertEqual(os.path.realpath(lines[0]), os.path.realpath(self.temp_dir))
+        self.assertEqual(lines[1], "hello")
+        self.assertEqual(os.getcwd(), cwd_before)
+
+    def test_shell_real_arguments_are_all_passed(self):
+        result = shell(command="echo", arguments=["a", "b", "c"])
+
+        self.assertEqual(result.stdout.strip(), "a b c")
+
+    def test_shell_real_failure(self):
+        result = shell(command="exit 3", working_directory=self.temp_dir)
+
+        self.assertEqual(result.return_code, 3)
+
 
 class TestIsLineInFile(unittest.TestCase):
-    """Test the isLineInFile function."""
-
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
+        self.test_file = os.path.join(self.temp_dir, "test.txt")
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def test_is_line_in_file_exact_match_true(self):
-        """Test exact line matching when line exists."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("line 1\n")
-            f.write("target line\n")
-            f.write("line 3\n")
+    def _write(self, *lines):
+        with open(self.test_file, "w") as f:
+            f.writelines(line + "\n" for line in lines)
 
-        result = isLineInFile.node_function(test_file, "target line", exact_match=True)
+    def test_exact_match_true(self):
+        self._write("line 1", "target line", "line 3")
 
-        self.assertTrue(result)
+        self.assertTrue(
+            isLineInFile(filepath=self.test_file, line="target line", exact_match=True)
+        )
 
-    def test_is_line_in_file_exact_match_false(self):
-        """Test exact line matching when line doesn't exist."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("line 1\n")
-            f.write("different line\n")
-            f.write("line 3\n")
+    def test_exact_match_false(self):
+        self._write("line 1", "target line plus", "line 3")
 
-        result = isLineInFile.node_function(test_file, "target line", exact_match=True)
+        self.assertFalse(
+            isLineInFile(filepath=self.test_file, line="target line", exact_match=True)
+        )
 
-        self.assertFalse(result)
+    def test_partial_match_true(self):
+        self._write("line 1", "this contains target substring", "line 3")
 
-    def test_is_line_in_file_partial_match_true(self):
-        """Test partial line matching when substring exists."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("line 1\n")
-            f.write("this contains target substring\n")
-            f.write("line 3\n")
+        self.assertTrue(
+            isLineInFile(filepath=self.test_file, line="target", exact_match=False)
+        )
 
-        result = isLineInFile.node_function(test_file, "target", exact_match=False)
+    def test_partial_match_false(self):
+        self._write("line 1", "different content", "line 3")
 
-        self.assertTrue(result)
+        self.assertFalse(
+            isLineInFile(filepath=self.test_file, line="target", exact_match=False)
+        )
 
-    def test_is_line_in_file_partial_match_false(self):
-        """Test partial line matching when substring doesn't exist."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("line 1\n")
-            f.write("different content\n")
-            f.write("line 3\n")
+    def test_default_is_exact_match(self):
+        self._write("this contains target substring")
 
-        result = isLineInFile.node_function(test_file, "target", exact_match=False)
+        self.assertFalse(isLineInFile(filepath=self.test_file, line="target"))
 
-        self.assertFalse(result)
+    def test_file_not_found(self):
+        missing = os.path.join(self.temp_dir, "nonexistent.txt")
 
-    def test_is_line_in_file_file_not_found(self):
-        """Test behavior when file doesn't exist."""
-        non_existent_file = os.path.join(self.temp_dir, "nonexistent.txt")
+        self.assertFalse(isLineInFile(filepath=missing, line="test"))
 
-        result = isLineInFile.node_function(non_existent_file, "test", exact_match=True)
+    def test_empty_file(self):
+        self._write()
 
-        self.assertFalse(result)
-
-    def test_is_line_in_file_empty_file(self):
-        """Test behavior with empty file."""
-        test_file = os.path.join(self.temp_dir, "empty.txt")
-        with open(test_file, "w") as f:
-            pass  # Empty file
-
-        result = isLineInFile.node_function(test_file, "test", exact_match=True)
-
-        self.assertFalse(result)
+        self.assertFalse(isLineInFile(filepath=self.test_file, line="test"))
 
 
 class TestCreateWorkingDirectory(unittest.TestCase):
-    """Test the create_WorkingDirectory function."""
-
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def test_create_working_directory_new(self):
-        """Test creating a new working directory."""
-        new_dir = os.path.join(self.temp_dir, "new_working_dir")
+    def test_create_new(self):
+        new_dir = os.path.join(self.temp_dir, "a", "b")
 
-        result = create_WorkingDirectory(new_dir).run()
+        result = create_WorkingDirectory(working_directory=new_dir)
 
         self.assertEqual(result, new_dir)
-        self.assertTrue(os.path.exists(new_dir))
         self.assertTrue(os.path.isdir(new_dir))
 
-    def test_create_working_directory_exists(self):
-        """Test behavior when directory already exists."""
+    def test_existing(self):
         existing_dir = os.path.join(self.temp_dir, "existing_dir")
         os.makedirs(existing_dir)
+        marker = os.path.join(existing_dir, "keep.txt")
+        with open(marker, "w") as f:
+            f.write("x")
 
-        result = create_WorkingDirectory(existing_dir).run()
+        for quiet in (False, True):
+            result = create_WorkingDirectory(
+                working_directory=existing_dir, quiet=quiet
+            )
+            self.assertEqual(result, existing_dir)
+        self.assertTrue(os.path.exists(marker))
 
-        self.assertEqual(result, existing_dir)
-        self.assertTrue(os.path.exists(existing_dir))
+    def test_concurrent_nested_creation(self):
+        """Sibling nodes create a directory and its subdirectories at once.
 
-    def test_create_working_directory_exists_quiet(self):
-        """Test behavior when directory exists with quiet=True."""
-        existing_dir = os.path.join(self.temp_dir, "existing_dir")
-        os.makedirs(existing_dir)
+        A check-then-create raced here: makedirs of ``base/sub`` creates
+        ``base`` between another thread's existence check and its makedirs.
+        """
+        n_threads, n_rounds = 16, 30
+        for round_ in range(n_rounds):
+            base = os.path.join(self.temp_dir, f"round{round_}", "calc")
+            # shared (base, base/sub, ...) and per-thread (.../t<i>) targets
+            targets = [
+                os.path.join(base, *(["sub"] * (i % 4)), *([f"t{i}"] * (i % 2)))
+                for i in range(n_threads)
+            ]
+            barrier = threading.Barrier(n_threads)
 
-        result = create_WorkingDirectory(existing_dir, quiet=True).run()
+            def create(target, barrier=barrier):
+                barrier.wait()
+                return create_WorkingDirectory(working_directory=target, quiet=True)
 
-        self.assertEqual(result, existing_dir)
-        self.assertTrue(os.path.exists(existing_dir))
+            with ThreadPoolExecutor(max_workers=n_threads) as pool:
+                results = list(pool.map(create, targets))
+
+            self.assertEqual(results, targets)
+            for target in targets:
+                self.assertTrue(os.path.isdir(target), target)
+
+    def test_path_that_is_a_file_raises(self):
+        path = os.path.join(self.temp_dir, "a_file")
+        with open(path, "w") as f:
+            f.write("x")
+
+        with self.assertRaises(FileExistsError):
+            create_WorkingDirectory(working_directory=path)
+
+    def test_logs_whether_it_created_the_directory(self):
+        new_dir = os.path.join(self.temp_dir, "logged")
+        with patch("pyiron_workflow_lammps.generic.logger") as logger:
+            create_WorkingDirectory(working_directory=new_dir)
+            create_WorkingDirectory(working_directory=new_dir)
+            create_WorkingDirectory(working_directory=new_dir, quiet=True)
+
+        self.assertEqual(logger.info.call_count, 2)
+        self.assertIn("made directory", logger.info.call_args_list[0].args[0])
+        self.assertIn("already exists", logger.info.call_args_list[1].args[0])
+        logger.warning.assert_called_once()
+        self.assertIn("already exists", logger.warning.call_args.args[0])
 
 
 class TestDeleteFilesRecursively(unittest.TestCase):
-    """Test the delete_files_recursively function."""
-
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir)
 
-    def test_delete_files_recursively_success(self):
-        """Test successful file deletion."""
-        # Create test files
-        test_file1 = os.path.join(self.temp_dir, "file1.txt")
-        test_file2 = os.path.join(self.temp_dir, "file2.txt")
-        subdir = os.path.join(self.temp_dir, "subdir")
-        os.makedirs(subdir)
-        test_file3 = os.path.join(subdir, "file3.txt")
+    def _touch(self, *parts):
+        path = os.path.join(self.temp_dir, *parts)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, "w") as f:
+            f.write("content")
+        return path
 
-        with open(test_file1, "w") as f:
-            f.write("content1")
-        with open(test_file2, "w") as f:
-            f.write("content2")
-        with open(test_file3, "w") as f:
-            f.write("content3")
+    def test_success(self):
+        file1 = self._touch("file1.txt")
+        file2 = self._touch("file2.txt")
+        file3 = self._touch("subdir", "file1.txt")
 
-        files_to_delete = ["file1.txt", "file3.txt"]
-
-        result = delete_files_recursively(self.temp_dir, files_to_delete).run()
+        result = delete_files_recursively(
+            working_directory=self.temp_dir, files_to_be_deleted=["file1.txt"]
+        )
 
         self.assertEqual(result, self.temp_dir)
-        self.assertFalse(os.path.exists(test_file1))
-        self.assertTrue(os.path.exists(test_file2))  # Should not be deleted
-        self.assertFalse(os.path.exists(test_file3))
+        self.assertFalse(os.path.exists(file1))
+        self.assertTrue(os.path.exists(file2))
+        self.assertFalse(os.path.exists(file3))
 
-    def test_delete_files_recursively_invalid_directory(self):
-        """Test behavior with invalid directory."""
+    def test_invalid_directory(self):
         invalid_dir = os.path.join(self.temp_dir, "nonexistent")
 
-        result = delete_files_recursively(invalid_dir, ["test.txt"]).run()
+        result = delete_files_recursively(
+            working_directory=invalid_dir, files_to_be_deleted=["test.txt"]
+        )
 
         self.assertEqual(result, invalid_dir)
 
-    def test_delete_files_recursively_no_matching_files(self):
-        """Test behavior when no files match the deletion criteria."""
-        test_file = os.path.join(self.temp_dir, "keep_this.txt")
-        with open(test_file, "w") as f:
-            f.write("content")
+    def test_no_matching_files(self):
+        keep = self._touch("keep_this.txt")
 
-        result = delete_files_recursively(self.temp_dir, ["delete_this.txt"]).run()
+        delete_files_recursively(
+            working_directory=self.temp_dir, files_to_be_deleted=["delete_this.txt"]
+        )
 
-        self.assertEqual(result, self.temp_dir)
-        self.assertTrue(os.path.exists(test_file))  # Should still exist
+        self.assertTrue(os.path.exists(keep))
 
-    def test_delete_files_recursively_remove_raises(self):
-        """If `os.remove` raises (e.g. permission error), the function must
-        log + continue without propagating (generic.py:202-203).
-        """
-        test_file = os.path.join(self.temp_dir, "doomed.txt")
-        with open(test_file, "w") as f:
-            f.write("content")
+    def test_remove_raises_is_logged_not_propagated(self):
+        doomed = self._touch("doomed.txt")
 
         with patch(
             "pyiron_workflow_lammps.generic.os.remove",
             side_effect=PermissionError("nope"),
         ) as mock_remove:
-            result = delete_files_recursively(self.temp_dir, ["doomed.txt"]).run()
+            result = delete_files_recursively(
+                working_directory=self.temp_dir, files_to_be_deleted=["doomed.txt"]
+            )
 
         self.assertEqual(result, self.temp_dir)
         mock_remove.assert_called_once()
-        # File was never actually removed since os.remove was patched out.
-        self.assertTrue(os.path.exists(test_file))
+        self.assertTrue(os.path.exists(doomed))
 
 
 class TestCompressDirectory(unittest.TestCase):
-    """Test the compress_directory function."""
-
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
+        self.parent = tempfile.mkdtemp()
+        self.temp_dir = os.path.join(self.parent, "calc")
+        os.makedirs(self.temp_dir)
+        for name in ("keep.txt", "exclude.txt", "exclude.log"):
+            with open(os.path.join(self.temp_dir, name), "w") as f:
+                f.write(name)
 
     def tearDown(self):
-        shutil.rmtree(self.temp_dir)
+        shutil.rmtree(self.parent)
 
-    def test_compress_directory_basic(self):
-        """Test basic directory compression."""
-        # Create test files
-        test_file1 = os.path.join(self.temp_dir, "file1.txt")
-        test_file2 = os.path.join(self.temp_dir, "file2.txt")
+    def _members(self, tarball):
+        with tarfile.open(tarball) as tar:
+            return sorted(os.path.basename(n) for n in tar.getnames())
 
-        with open(test_file1, "w") as f:
-            f.write("content1")
-        with open(test_file2, "w") as f:
-            f.write("content2")
+    def test_inside_dir(self):
+        result = compress_directory(directory_path=self.temp_dir, inside_dir=True)
 
-        result = compress_directory(self.temp_dir, actually_compress=True).run()
-
-        self.assertIsNotNone(result)
-        self.assertTrue(result.endswith(".tar.gz"))
-        self.assertTrue(os.path.exists(result))
-
-    def test_compress_directory_inside_dir(self):
-        """Test compression with inside_dir=True."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("content")
-
-        result = compress_directory(
-            self.temp_dir, inside_dir=True, actually_compress=True
-        ).run()
-
-        expected_path = os.path.join(
-            self.temp_dir, os.path.basename(self.temp_dir) + ".tar.gz"
+        self.assertEqual(result, os.path.join(self.temp_dir, "calc.tar.gz"))
+        self.assertEqual(
+            self._members(result), ["exclude.log", "exclude.txt", "keep.txt"]
         )
-        self.assertEqual(result, expected_path)
 
-    def test_compress_directory_outside_dir(self):
-        """Test compression with inside_dir=False."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("content")
+    def test_outside_dir(self):
+        result = compress_directory(directory_path=self.temp_dir, inside_dir=False)
 
+        self.assertEqual(result, os.path.join(self.parent, "calc.tar.gz"))
+        self.assertTrue(os.path.exists(result))
+
+    def test_exclusions(self):
         result = compress_directory(
-            self.temp_dir, inside_dir=False, actually_compress=True
-        ).run()
-
-        expected_path = os.path.join(
-            os.path.dirname(self.temp_dir), os.path.basename(self.temp_dir) + ".tar.gz"
+            directory_path=self.temp_dir,
+            exclude_files=["exclude.txt"],
+            exclude_file_patterns=["*.log"],
         )
-        self.assertEqual(result, expected_path)
 
-    def test_compress_directory_exclude_files(self):
-        """Test compression with file exclusion."""
-        test_file1 = os.path.join(self.temp_dir, "keep.txt")
-        test_file2 = os.path.join(self.temp_dir, "exclude.txt")
+        self.assertEqual(self._members(result), ["keep.txt"])
 
-        with open(test_file1, "w") as f:
-            f.write("keep this")
-        with open(test_file2, "w") as f:
-            f.write("exclude this")
-
+    def test_no_compression(self):
         result = compress_directory(
-            self.temp_dir, exclude_files=["exclude.txt"], actually_compress=True
-        ).run()
-
-        self.assertIsNotNone(result)
-        self.assertTrue(os.path.exists(result))
-
-    def test_compress_directory_exclude_patterns(self):
-        """Test compression with pattern exclusion."""
-        test_file1 = os.path.join(self.temp_dir, "keep.txt")
-        test_file2 = os.path.join(self.temp_dir, "exclude.log")
-
-        with open(test_file1, "w") as f:
-            f.write("keep this")
-        with open(test_file2, "w") as f:
-            f.write("exclude this")
-
-        result = compress_directory(
-            self.temp_dir, exclude_file_patterns=["*.log"], actually_compress=True
-        ).run()
-
-        self.assertIsNotNone(result)
-        self.assertTrue(os.path.exists(result))
-
-    def test_compress_directory_no_compression(self):
-        """Test compression with actually_compress=False."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("content")
-
-        result = compress_directory(self.temp_dir, actually_compress=False).run()
+            directory_path=self.temp_dir, actually_compress=False
+        )
 
         self.assertIsNone(result)
-
-
-class TestSubmitToSlurm(unittest.TestCase):
-    """Test the submit_to_slurm function."""
-
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir)
-
-    @patch("subprocess.run")
-    def test_submit_to_slurm_basic(self, mock_run):
-        """Test basic SLURM submission."""
-        mock_node = MagicMock()
-        mock_node.graph_root = mock_node
-        mock_node.full_label = "test_node"
-        mock_node.lexical_delimiter = "."
-        mock_node.as_path.return_value = Path(self.temp_dir)
-
-        mock_submission = MagicMock()
-        mock_run.return_value = mock_submission
-
-        result = submit_to_slurm(mock_node)
-
-        self.assertEqual(result, mock_submission)
-        mock_run.assert_called_once()
-
-    def test_submit_to_slurm_not_root_node(self):
-        """Test SLURM submission with non-root node."""
-        mock_node = MagicMock()
-        mock_root = MagicMock()
-        mock_node.graph_root = mock_root
-        mock_node.full_label = "child_node"
-
-        with self.assertRaises(ValueError) as context:
-            submit_to_slurm(mock_node)
-
-        self.assertIn("Can only submit parent-most nodes", str(context.exception))
+        self.assertFalse(os.path.exists(os.path.join(self.temp_dir, "calc.tar.gz")))
 
 
 class TestRemoveDir(unittest.TestCase):
-    """Test the remove_dir function."""
-
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-
-    def tearDown(self):
-        if os.path.exists(self.temp_dir):
-            shutil.rmtree(self.temp_dir)
-
-    def test_remove_dir_actually_remove(self):
-        """Test directory removal with actually_remove=True."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
+        with open(os.path.join(self.temp_dir, "test.txt"), "w") as f:
             f.write("content")
 
-        result = remove_dir(self.temp_dir, actually_remove=True).run()
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_actually_remove(self):
+        result = remove_dir(directory_path=self.temp_dir, actually_remove=True)
 
         self.assertEqual(result, self.temp_dir)
         self.assertFalse(os.path.exists(self.temp_dir))
 
-    def test_remove_dir_no_remove(self):
-        """Test directory removal with actually_remove=False."""
-        test_file = os.path.join(self.temp_dir, "test.txt")
-        with open(test_file, "w") as f:
-            f.write("content")
-
-        result = remove_dir(self.temp_dir, actually_remove=False).run()
+    def test_default_keeps_directory(self):
+        result = remove_dir(directory_path=self.temp_dir)
 
         self.assertEqual(result, self.temp_dir)
-        self.assertTrue(os.path.exists(self.temp_dir))  # Should still exist
+        self.assertTrue(os.path.exists(self.temp_dir))
+
+
+@unittest.skipIf(pwf is None, "pyiron_workflow is not installed")
+class TestGenericAsNodes(unittest.TestCase):
+    """The decorated functions also run as pyiron_workflow nodes."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir)
+
+    def test_shell_node(self):
+        run = pwf.node(shell).run(command="echo node", working_directory=self.temp_dir)
+
+        self.assertEqual(run.outputs.output.stdout.strip(), "node")
+        self.assertEqual(run.outputs.output.return_code, 0)
+
+    def test_create_working_directory_node(self):
+        new_dir = os.path.join(self.temp_dir, "made_by_node")
+
+        run = pwf.node(create_WorkingDirectory).run(working_directory=new_dir)
+
+        self.assertEqual(run.outputs.working_directory, new_dir)
+        self.assertTrue(os.path.isdir(new_dir))
+
+    def test_is_line_in_file_node(self):
+        path = os.path.join(self.temp_dir, "log.lammps")
+        with open(path, "w") as f:
+            f.write("Total wall time: 0:00:01\n")
+
+        run = pwf.run(
+            isLineInFile, filepath=path, line="Total wall time:", exact_match=False
+        )
+
+        self.assertTrue(run.outputs.line_found)
 
 
 if __name__ == "__main__":

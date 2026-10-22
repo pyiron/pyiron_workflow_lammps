@@ -1,0 +1,181 @@
+# Build the sdist and wheel in isolation and check that each installs into a
+# fresh venv (no conda env, no pre-installed deps, no --no-build-isolation)
+# and passes the test suite run from outside the checkout (for the sdist, the
+# suite shipped inside the sdist itself). Those venvs have no LAMMPS, so the
+# tests that run `lmp` skip there; the lammps-integration job runs the whole
+# suite, including them, against the installed wheel in the conda CI env
+# (which provides conda-forge lammps) on every supported python. The build
+# job also checks that the release rewrite keeps each == pin inside its
+# published range. Complements the conda-based push-pull
+# workflow, which tests the source tree with `unittest discover`.
+name: Clean install
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # versioneer needs the tags to compute the version
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check every CI pin lies inside its published release range
+        run: |
+          # Same rewrite script and inputs as release.yml, on a temp copy;
+          # catches a dependabot pin bump past a cap in .ci_support/upper-bound.yml.
+          # pyyaml/toml versions: pyproject-release.yml's defaults.
+          python -m pip install pyyaml==6.0.1 toml==0.10.2 packaging
+          python .github/scripts/check_release_ranges.py
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade build twine
+          python -m build
+          python -m twine check --strict dist/*
+          ls -l dist
+      - name: Check the wheel ships no tests and a static _version.py
+        run: |
+          python - <<'EOF'
+          import glob
+          import zipfile
+
+          (whl,) = glob.glob("dist/*.whl")
+          names = zipfile.ZipFile(whl).namelist()
+          bad = [n for n in names if n.startswith("tests/")]
+          assert not bad, bad
+          src = zipfile.ZipFile(whl).read("pyiron_workflow_lammps/_version.py").decode()
+          # versioneer's build step replaces the git-querying template
+          assert "version_json" in src, "wheel ships the versioneer template _version.py"
+          print(whl, "OK")
+          EOF
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  install-and-test:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+        dist: ['wheel', 'sdist']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: ${{ runner.temp }}/dist
+      - name: Install the ${{ matrix.dist }} into a fresh venv
+        working-directory: ${{ runner.temp }}
+        run: |
+          python -m venv venv
+          if [ "${{ matrix.dist }}" = wheel ]; then
+            artifact=$(ls dist/*.whl)
+          else
+            artifact=$(ls dist/*.tar.gz)
+          fi
+          venv/bin/python -m pip install --upgrade pip
+          venv/bin/python -m pip install "${artifact}[test]"
+          venv/bin/python -m pip check
+      - name: Import the installed package
+        working-directory: ${{ runner.temp }}
+        run: |
+          venv/bin/python - <<'EOF'
+          import importlib.metadata
+
+          import pyiron_workflow_lammps as pwl
+          import pyiron_workflow_lammps.engine
+          import pyiron_workflow_lammps.generic
+          import pyiron_workflow_lammps.lammps
+
+          print(pwl.__file__, pwl.__version__)
+          assert "site-packages" in pwl.__file__, pwl.__file__
+          assert pwl.__version__ != "0+unknown", pwl.__version__
+          assert pwl.__version__ == importlib.metadata.version("pyiron_workflow_lammps")
+          EOF
+      - name: Run the tests against the installed package
+        run: |
+          testroot="${{ runner.temp }}/testrun"
+          mkdir -p "$testroot"
+          if [ "${{ matrix.dist }}" = sdist ]; then
+            # Run the suite shipped *inside* the sdist (tests/ + its
+            # pyproject.toml pytest config), not the checkout's, so a
+            # MANIFEST.in regression that drops conftest.py or fixtures
+            # fails here. The package source in the extracted tree is never
+            # imported: pytest runs from $testroot and the import step above
+            # already asserted the installed copy lives in site-packages.
+            tar -xzf "${{ runner.temp }}"/dist/*.tar.gz -C "${{ runner.temp }}"
+            sdistdir=$(ls -d "${{ runner.temp }}"/pyiron_workflow_lammps-*/)
+            test -f "$sdistdir/tests/conftest.py"
+            cp -r "$sdistdir/tests" "$sdistdir/pyproject.toml" "$testroot"/
+          else
+            # pyproject.toml carries the pytest config; no package source is copied
+            cp -r tests pyproject.toml "$testroot"/
+          fi
+          cd "$testroot"
+          ../venv/bin/python -m pytest -p no:cacheprovider tests
+
+  lammps-integration:
+    # The whole suite, LAMMPS runs and the README examples included, against
+    # the installed wheel in the CI conda env (.ci_support/environment.yml:
+    # the pinned dependencies plus conda-forge lammps).
+    # One leg per supported python (conda-forge has nompi lammps builds for
+    # each): push-pull's `unittest discover` does not collect the pytest-style
+    # integration tests, so this is where LAMMPS really runs.
+    needs: build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pyiron/actions/cached-miniforge@actions-4.2.1
+        with:
+          python-version: ${{ matrix.python-version }}
+          env-files: .ci_support/environment.yml
+          # install the built wheel below, not the checkout
+          local-code-directory: ''
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: ${{ runner.temp }}/dist
+      - name: Install the wheel into the conda env
+        shell: bash -l {0}
+        run: |
+          # --no-deps: the dependencies are the conda env's pinned packages
+          python -m pip install --no-deps "${{ runner.temp }}"/dist/*.whl
+          python -m pip check
+          which lmp
+      - name: Run the tests against the installed package
+        shell: bash -l {0}
+        run: |
+          testroot="${{ runner.temp }}/testrun"
+          mkdir -p "$testroot"
+          # README.md next to tests/ so tests/integration/test_readme.py runs it
+          cp -r tests pyproject.toml README.md "$testroot"/
+          cd "$testroot"
+          python - <<'EOF'
+          import sys
+
+          import pyiron_workflow_lammps as pwl
+
+          print(sys.version)
+          print(pwl.__file__, pwl.__version__)
+          assert "site-packages" in pwl.__file__, pwl.__file__
+          assert sys.version.startswith("${{ matrix.python-version }}."), sys.version
+          EOF
+          python -m pytest -p no:cacheprovider -rs tests

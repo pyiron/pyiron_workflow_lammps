@@ -10,3 +10,12 @@ apidoc/
 .ipynb_checkpoints/
 test_times.dat
 core.*
+
+# build and run artefacts
+*.egg-info/
+build/
+dist/
+recovery.*pckl
+__pycache__/
+.pytest_cache/
+.ruff_cache/

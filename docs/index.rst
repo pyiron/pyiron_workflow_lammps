@@ -2,7 +2,10 @@
 
 .. _index:
 
-.. include:: README.md
+.. The landing page is the repository's README.md itself (not a copy), so the
+   two cannot drift apart.
+
+.. include:: ../README.md
    :parser: myst_parser.sphinx_
 
 .. toctree::

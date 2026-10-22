@@ -1,0 +1,9 @@
+# Extra packages for executing notebooks/ (CI's build-notebooks job and
+# Binder): merged after .ci_support/environment.yml via push-pull.yml's
+# notebooks-env-files. matplotlib is used by notebooks/example.ipynb for
+# plotting only; it is not a dependency of the package.
+channels:
+  - conda-forge
+
+dependencies:
+  - matplotlib-base

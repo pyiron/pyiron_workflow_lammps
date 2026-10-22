@@ -80,7 +80,7 @@ class TestLammpsBenchmark(unittest.TestCase):
                 lammps_input=lammps_input,
                 filename="test.in",
                 working_directory=location,
-            )()
+            )
             end_time = time.time()
 
             results[location] = {

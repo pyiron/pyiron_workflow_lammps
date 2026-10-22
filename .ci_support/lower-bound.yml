@@ -1,22 +1,34 @@
+# Inclusive floors. Two consumers:
+# - release.yml writes them into the published [project].dependencies;
+# - push-pull.yml solves this file as the alternate-tests env (python 3.11,
+#   `unittest discover tests/unit`, no LAMMPS), so a source change that needs
+#   something newer than a floor fails CI instead of shipping a broken range.
+# pyiron_workflow_atomistics 0.2.2 is the binding floor for most of the stack:
+# 0.2.0/0.2.1 pin pyiron_workflow==0.19.0 and flowrep<=0.6.2, and the engine
+# API used here (CalcInput*, EngineOutput, testing.EngineConformanceTests) is
+# byte-identical from 0.2.0 to 0.3.0. Via its structuretoolkit dependency it
+# needs ase>=3.24.0, and its scipy>=1.17.1 needs numpy>=1.26.4.
+# lammpsparser 0.0.7 is the release #61 migrated to (write_lammps_structure /
+# parse_lammps_output_files are unchanged up to 0.0.10).
+# Names must be the keys the rewrite looks up, i.e. the values of
+# .github/actions/.support/pypi_vs_conda_names.json where mapped: that file
+# maps pyiron-workflow-atomistics to the underscore spelling, so it goes in
+# the pip section with underscores (as in pyiron_workflow_vasp).
 channels:
   - conda-forge
 
 dependencies:
-  - python=3.11
+  - python =3.11
   - pip
-  - numpy=1.26.4
-  - ase=3.28.0
-  - pymatgen=2026.5.4
-  - pyiron_workflow=0.15.6
-  - lammpsparser=0.0.7
-  - pandas=3.0.3
-  - scipy=1.17.1
-  - matplotlib=3.10.9
-  - scikit-learn=1.8.0
-  - tqdm=4.67.3
-  - lammps=2024.08.29
-  - pysqa=0.4.2
+  # build backend for CI's `pip install --no-build-isolation .` (PEP 639
+  # license string); not a pyproject dependency, so the rewrite ignores it
+  - setuptools >=77
+  - ase =3.24.0
+  - flowrep =0.6.0  # only fr.atomic / fr.workflow are used
+  - lammpsparser =0.0.7
+  - numpy =1.26.4
+  - pyiron_snippets =1.3.0  # first release flowrep / pyiron_workflow 0.19 accept
+  - pyiron_workflow =0.19.0
+  - pymatgen =2024.8.8  # pyiron_workflow_atomistics' floor
   - pip:
-      - pyiron-workflow-atomistics==0.0.7
-      - pyiron-snippets==1.2.1
-      - lz-GB-code==0.1.0
+      - pyiron_workflow_atomistics==0.2.2

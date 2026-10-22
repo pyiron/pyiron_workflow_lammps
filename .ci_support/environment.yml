@@ -1,21 +1,29 @@
+# CI environment: the == pins of pyproject.toml's [project].dependencies under
+# their conda-forge names, plus the LAMMPS binary and the test runner.
+# Solves on linux-64, osx-64 and osx-arm64 for python 3.11-3.14.
 channels:
-- conda-forge
+  - conda-forge
+
 dependencies:
-- python>=3.11,<3.13
-- pip
-- numpy=1.26.4
-- ase=3.28.0
-- pymatgen=2026.5.4
-- pyiron_workflow=0.15.6
-- lammpsparser=0.0.7
-- pandas=3.0.3
-- scipy=1.17.1
-- matplotlib=3.10.9
-- scikit-learn=1.8.0
-- tqdm=4.67.3
-- lammps=2024.08.29
-- pysqa=0.4.2
-- pip:
-  - pyiron-workflow-atomistics==0.0.7
-  - pyiron-snippets==1.2.1
-  - lz-GB-code==0.1.0
+  - python>=3.11,<3.15
+  - pip
+  # >=77 for the PEP 639 license string; CI builds with --no-build-isolation
+  - setuptools >=77
+  - ase =3.29.0
+  - flowrep =0.6.7
+  - lammpsparser =0.0.10
+  - numpy =2.4.6
+  - pyiron_snippets =1.5.0
+  - pyiron_workflow =0.20.3
+  # conda-forge spells this one with hyphens (unlike pyiron_workflow); the
+  # dependabot env updater matches the PyPI name, so keep the hyphens.
+  - pyiron-workflow-atomistics =0.3.0
+  - pymatgen =2026.9.24
+  # Not a Python dependency: the binary the integration tests run (`lmp`).
+  # nompi keeps the runtime free of MPI launch quirks on the CI runners;
+  # every variant ships `lmp` with MANYBODY (eam/fs). Build 2: builds 4-6
+  # declare __glibc>=2.17 but link GLIBC_2.38, so `lmp` fails to load on
+  # ubuntu-22.04 (glibc 2.35); build 3 for py3.14 needs numpy>=2.5.1.
+  - lammps =2025.07.22=*nompi_2
+  - pytest
+  - pytest-cov

@@ -83,7 +83,12 @@ jobs:
     runs-on: ${{ inputs.runner }}
     steps:
     - uses: actions/checkout@v4
-    - uses: pyiron/actions/cached-miniforge@actions-4.0.8
+      with:
+        # versioneer derives the version from the tag. A release event's
+        # depth-1 checkout does fetch that tag, but any other trigger gets a
+        # tagless shallow clone and would build 0.post0.devN.
+        fetch-depth: 0
+    - uses: pyiron/actions/cached-miniforge@actions-4.2.1
       with:
         python-version: ${{ inputs.python-version }}
         env-files: ${{ inputs.env-files }}
@@ -109,8 +114,8 @@ jobs:
     - name: Build
       shell: bash -l {0}
       run: |
-        pip install versioneer[toml]==0.29
-        python setup.py sdist bdist_wheel
+        pip install build
+        python -m build
     - name: Publish distribution 📦 to PyPI
       if: inputs.publish-to-pypi
       uses: pypa/gh-action-pypi-publish@release/v1

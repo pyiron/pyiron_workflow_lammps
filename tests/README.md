@@ -1,143 +1,62 @@
-# pyiron_workflow_lammps Tests
-
-This directory contains comprehensive unit tests for the `pyiron_workflow_lammps` module.
-
-## Test Structure
+# pyiron_workflow_lammps tests
 
 ```
 tests/
-├── unit/                    # Unit tests
-│   ├── test_lammps.py      # Tests for lammps.py module
-│   ├── test_engine.py      # Tests for engine.py module
-│   ├── test_generic.py     # Tests for generic.py module
-│   ├── test_version.py     # Tests for _version.py module
-│   ├── test_tests.py       # Basic module tests
-│   └── test_suite.py       # Comprehensive test suite
-├── integration/            # Integration tests (future)
-└── benchmark/             # Benchmark tests (future)
+├── conftest.py               # markers + LAMMPS fixtures (pytest only)
+├── unit/                     # fast, no LAMMPS binary needed (except one smoke test)
+│   ├── test_api.py           # public node names / output labels
+│   ├── test_engine.py        # LammpsEngine: scripts, statelessness, custom fns
+│   ├── test_engine_conformance.py  # atomistics EngineConformanceTests
+│   ├── test_generic.py       # shell & file helpers
+│   ├── test_lammps.py        # write/parse nodes, lammps_job wiring
+│   ├── test_velocity_capture.py
+│   └── test_version.py
+├── integration/              # real LAMMPS runs (marker: integration)
+│   ├── test_lammps_runs.py   # static / minimize / MD through atomistics' calculate,
+│   │                         # incl. every thermostat and rotated cells vs ASE's EAM
+│   └── test_readme.py        # runs the python blocks of ../README.md
+├── benchmark/                # timing sanity checks
+├── fixtures/Al-Fe.eam.fs     # potential used by every real LAMMPS run
+└── resources/                # canned LAMMPS output (lammps.data, dump.out, logs)
 ```
 
-## Running Tests
-
-### Run All Tests
-
-To run all unit tests:
+## Running
 
 ```bash
-# From the project root directory
-python -m pytest tests/unit/ -v
-
-# Or run the test suite directly
-python tests/unit/test_suite.py
+python -m pytest tests                       # everything
+python -m pytest tests/unit                  # unit tests
+python -m pytest tests -m "not integration"  # skip real LAMMPS runs
+python -m unittest discover tests/unit       # what the shared pyiron CI runs
 ```
 
-### Run Individual Test Files
+Tests that run LAMMPS use `$LAMMPS_COMMAND` if set (an executable,
+optionally with a launcher, e.g. `mpirun -np 2 lmp`), else `lmp` from `PATH`,
+and are skipped when neither is found. The binary needs the `MANYBODY`
+package for `pair_style eam/fs`.
 
-```bash
-# Test specific modules
-python -m pytest tests/unit/test_lammps.py -v
-python -m pytest tests/unit/test_engine.py -v
-python -m pytest tests/unit/test_generic.py -v
-python -m pytest tests/unit/test_version.py -v
-```
+## Conventions
 
-### Run with Coverage
-
-```bash
-# Install pytest-cov if not already installed
-pip install pytest-cov
-
-# Run tests with coverage
-python -m pytest tests/unit/ --cov=pyiron_workflow_lammps --cov-report=html
-```
-
-## Test Coverage
-
-The unit tests cover the following functionality:
-
-### lammps.py Module
-- `write_LammpsStructure`: Structure writing functionality
-- `write_LammpsInput`: Input file writing
-- `parse_LammpsOutput`: Output parsing with custom and default parsers
-- `get_structure_species_lists`: Species list extraction
-- `get_species_map`: Species mapping from LAMMPS data files
-- `arrays_to_ase_atoms`: Array to ASE Atoms conversion
-- `lammps_job`: Complete LAMMPS workflow
-- `lammps_calculator_fn`: Calculator function wrapper
-
-### engine.py Module
-- `LammpsEngine`: Engine initialization and configuration
-- Script building for different calculation modes:
-  - Static calculations
-  - Minimization (with and without cell relaxation)
-  - Molecular dynamics (NVE, NVT, NPT)
-  - Various thermostats (Nose-Hoover, Berendsen, Andersen, etc.)
-- Element order extraction
-- Input file writing
-- Calculation and parsing function setup
-
-### generic.py Module
-- `Storage`: Data storage utilities
-- `ShellOutput`: Shell command output handling
-- `VarType`: Variable type definitions
-- `FileObject`: File handling utilities
-- `shell`: Shell command execution
-- `isLineInFile`: File content searching
-- `create_WorkingDirectory`: Directory creation
-- `delete_files_recursively`: Recursive file deletion
-- `compress_directory`: Directory compression
-- `submit_to_slurm`: SLURM job submission
-- `remove_dir`: Directory removal
-
-### _version.py Module
-- Version management functionality
-- Git integration
-- Command execution utilities
-
-## Test Dependencies
-
-The tests require the following dependencies:
-- `pytest` (for running tests)
-- `pytest-cov` (for coverage reports)
-- `numpy` (for array operations)
-- `ase` (for atomic structures)
-- `unittest.mock` (for mocking)
-
-## Writing New Tests
-
-When adding new functionality to the module, please add corresponding unit tests:
-
-1. Create test functions that start with `test_`
-2. Use descriptive test names that explain what is being tested
-3. Test both success and failure cases
-4. Use mocking for external dependencies
-5. Test edge cases and error conditions
-6. Add docstrings to explain test purpose
-
-Example test structure:
-
-```python
-def test_function_name_success_case(self):
-    """Test successful execution of function_name."""
-    # Arrange
-    input_data = "test_input"
-    
-    # Act
-    result = function_name(input_data)
-    
-    # Assert
-    self.assertEqual(result, expected_output)
-
-def test_function_name_failure_case(self):
-    """Test function_name with invalid input."""
-    # Arrange
-    invalid_input = None
-    
-    # Act & Assert
-    with self.assertRaises(ValueError):
-        function_name(invalid_input)
-```
-
-## Continuous Integration
-
-The tests are automatically run in CI/CD pipelines to ensure code quality and prevent regressions. All tests must pass before code can be merged. 
+- `tests/unit` and `tests/benchmark` are also run by `unittest discover`, so
+  they use `unittest.TestCase` and no pytest fixtures or imports.
+- The suite must run from a copy of `tests/` against an installed package
+  (the clean-install CI does this with the sdist's `tests/`): locate data
+  via `Path(__file__)`, never import from `tests`, never touch `sys.path`,
+  and do not depend on files outside `tests/` (`test_readme.py` skips when
+  `README.md` is not next to `tests/`).
+- Markers are registered in `conftest.py` (mirrored in `pyproject.toml`).
+  `conftest.py` also hides lammpsparser's per-parse `c_eng` unit notice:
+  the package filters it at import, but pytest resets warning filters around
+  each test (`test_lammps.py` checks the package's filter in a subprocess).
+- `tests/resources` holds the output of a real 0-step `minimize 0 0 0 0`
+  run, whose log says `Stopping criterion = max iterations` (not
+  converged). Tests that need a converged or static log copy it with
+  `_canned_run` in `test_lammps.py`, which edits only that line and the
+  `Total wall time` line.
+- Known source bugs are pinned by `unittest.expectedFailure` /
+  `pytest.mark.xfail(strict=True)` tests with the reason in a comment; they
+  turn into failures once the bug is fixed, so remove the marker then.
+  There are none at the moment.
+- The rotated-cell tests in `test_lammps_runs.py` compare with
+  `ase.calculators.eam.EAM` on the same `tests/fixtures/Al-Fe.eam.fs`;
+  `final_stress` (GPa, compression positive) is compared with
+  `-atoms.get_stress(voigt=False) / ase.units.GPa`.

@@ -1,4 +1,5 @@
 import os
+import random
 import textwrap
 import warnings
 from collections.abc import Callable
@@ -20,6 +21,12 @@ class LammpsEngine:
     Mode is inferred from EngineInput by checking key attributes; boilerplate defaults
     are defined on the engine via `input_script_*` attributes.
     Thermostat and ensemble logic is implemented directly here.
+
+    The engine is never mutated by use: ``get_calculate_fn`` builds the input
+    script for each structure it is given, so one engine (and copies made with
+    ``with_working_directory`` or ``dataclasses.replace``) can be reused across
+    structures and threads. ``potential_elements=None`` means "the structure's
+    elements in order of first occurrence".
     """
 
     EngineInput: CalcInputStatic | CalcInputMinimize | CalcInputMD
@@ -76,7 +83,7 @@ class LammpsEngine:
     input_script_thermo_format: str = "%20.15g"
     input_script_thermo_every: int = 10
     input_script_min_style: str = "cg"
-    input_script_relax_pressure: float = 1e4
+    input_script_relax_pressure: float = 0.0
     input_script_relax_vmax: float = 0.001
     input_script_relax_type: Literal["iso", "aniso", "tri"] = "iso"
 
@@ -92,17 +99,13 @@ class LammpsEngine:
     def with_working_directory(self, subdir: str) -> "LammpsEngine":
         """Return a copy of this engine with working_directory composed.
 
-        Pure — never mutates self. Re-initialises self.calc_fn /
-        self.calc_fn_kwargs to None on the copy so the next
-        get_calculate_fn() call rebuilds the script against the new
-        directory (otherwise the sub-engine would inherit the parent's
-        stale cached kwargs).
+        Pure — never mutates self. Nothing is cached on the engine, so the
+        copy builds its script against the new directory, and a custom
+        ``calc_fn``/``parse_fn`` carries over.
         """
         return replace(
             self,
             working_directory=os.path.join(self.working_directory, subdir),
-            calc_fn=None,
-            calc_fn_kwargs=None,
         )
 
     def get_lammps_element_order(self, atoms: Atoms) -> list[str]:
@@ -132,18 +135,18 @@ class LammpsEngine:
                 "Keeping existing 'mode' (not overwriting). Ensure they agree.",
                 RuntimeWarning,
             )
-        else:
-            warnings.warn(
-                f"'mode' already set to '{current}' and also implied by EngineInput; no change.",
-                RuntimeWarning,
-            )
         return current
+
+    def _potential_elements(self, structure: Atoms) -> list[str]:
+        if self.potential_elements is not None:
+            return list(self.potential_elements)
+        return self.get_lammps_element_order(structure)
 
     def _build_script(self, structure: Atoms) -> str:
         # Boilerplate header
-        self.potential_elements = self.get_lammps_element_order(structure)
+        potential_elements = self._potential_elements(structure)
 
-        pair_coeff = ("*", "*", self.path_to_model, " ".join(self.potential_elements))
+        pair_coeff = ("*", "*", self.path_to_model, " ".join(potential_elements))
         boundary = (
             self.input_script_boundary
             if isinstance(self.input_script_boundary, str)
@@ -171,10 +174,9 @@ class LammpsEngine:
             "",
         ]
         self.toggle_mode()
-        print("current mode ", self.mode)
         # Mode-specific sections
         if self.mode == "static":
-            lines += [f"min_style {self.input_script_min_style}", "minimize 0 0 0 0"]
+            lines += ["run 0"]
 
         elif self.mode == "minimize":
             energy_convergence_tolerance = self.EngineInput.energy_convergence_tolerance
@@ -194,6 +196,10 @@ class LammpsEngine:
                 lines.append(
                     f"fix 1 all box/relax {self.input_script_relax_type} {self.input_script_relax_pressure:.6f} vmax {self.input_script_relax_vmax}"
                 )
+            # Dump on the thermo steps so trajectory frames and energies align
+            lines += self._final_frame_dump(
+                self.input_script_thermo_every, max_iterations
+            )
             lines += [
                 f"min_style {self.input_script_min_style}",
                 f"minimize {energy_convergence_tolerance} {force_convergence_tolerance} {max_iterations} {max_evaluations}",
@@ -202,9 +208,19 @@ class LammpsEngine:
         elif self.mode == "md":
             # MD run: velocities & thermostat/integrator
             md = self.EngineInput
-            # seed=None would be written literally as 'None' into LAMMPS commands.
-            seed = md.seed if md.seed is not None else 12345
-            T0 = md.initial_temperature or md.temperature
+            # seed=None means non-deterministic (CalcInputMD contract); LAMMPS
+            # needs an explicit positive seed, so draw one per script. The
+            # Marsaglia RNG behind fix langevin accepts at most 900000000.
+            seed = (
+                md.seed
+                if md.seed is not None
+                else random.SystemRandom().randint(1, 900_000_000)
+            )
+            T0 = (
+                md.initial_temperature
+                if md.initial_temperature is not None
+                else md.temperature
+            )
             # CalcInputMD time quantities are in FEMTOSECONDS (ASE/pwa convention), but
             # LAMMPS interprets times in the `units` system's native unit: ps for `metal`,
             # fs for `real`. Without this conversion `timestep 2.0` (meant as 2 fs) becomes
@@ -216,10 +232,11 @@ class LammpsEngine:
             dt = md.time_step * _time_fac
             tdamp = md.thermostat_time_constant * _time_fac
             pdamp = md.pressure_damping_timescale * _time_fac
-            # Velocity init
-            lines.append(
-                f"velocity all create {T0} {seed} mom yes rot yes dist gaussian"
-            )
+            # Velocity init (LAMMPS cannot create velocities at 0 K)
+            if T0 > 0:
+                lines.append(
+                    f"velocity all create {T0} {seed} mom yes rot yes dist gaussian"
+                )
             # Thermostat/integrator logic
             if md.mode == "NVE":
                 lines.append("fix 1 all nve")
@@ -230,9 +247,11 @@ class LammpsEngine:
                         f"fix 1 all nvt temp {md.temperature} {md.temperature} {tdamp}"
                     )
                 elif md.thermostat == "berendsen":
+                    # temp/berendsen only rescales velocities; it does not integrate
                     lines.append(
                         f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {tdamp}"
                     )
+                    lines.append("fix 2 all nve")
                 elif md.thermostat == "andersen":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} {tdamp} {seed}"
@@ -241,12 +260,14 @@ class LammpsEngine:
                 elif md.thermostat == "temp/rescale":
                     delta = getattr(md, "delta_temp", None) or 0.0
                     lines.append(
-                        f"fix 1 all temp/rescale {md.n_print} {md.temperature} {md.temperature} {delta} units box"
+                        f"fix 1 all temp/rescale {max(md.n_print, 1)} {md.temperature} {md.temperature} {delta} 1.0"
                     )
+                    lines.append("fix 2 all nve")
                 elif md.thermostat == "temp/csvr":
                     lines.append(
-                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {tdamp}"
+                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {tdamp} {seed}"
                     )
+                    lines.append("fix 2 all nve")
                 elif md.thermostat == "langevin":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} "
@@ -257,6 +278,8 @@ class LammpsEngine:
                     raise ValueError(f"Unsupported thermostat: {md.thermostat}")
 
             elif md.mode == "NPT":
+                if md.pressure is None:
+                    raise ValueError("NPT mode requires CalcInputMD.pressure (in Pa)")
                 pressure_bar = md.pressure / 1e5  # 1 bar = 1e5 Pa
                 if md.thermostat != "nose-hoover":
                     raise ValueError("NPT mode supports only 'nose-hoover' thermostat")
@@ -270,12 +293,31 @@ class LammpsEngine:
             # Timestep, thermo frequency, and run
             lines.append(f"timestep {dt}")
             lines.append(f"thermo {md.n_print}")
+            lines += self._final_frame_dump(md.n_print, md.n_ionic_steps)
             lines.append(f"run {md.n_ionic_steps}")
-            # print(lines)
         else:
             raise ValueError(f"Unknown mode: {self.mode}")
 
         return textwrap.dedent("\n".join(lines))
+
+    @staticmethod
+    def _final_frame_dump(every: int, last_step: int) -> list[str]:
+        """Dump every ``every`` steps *and* on ``last_step``.
+
+        Thermo output always includes the last step of a run, a plain
+        ``dump ... N`` only multiples of N, so the final structure/forces
+        could come from an earlier step than the final energy. Driving the
+        dump with a variable that also returns ``last_step`` keeps the dump
+        frames on the thermo steps (``first yes`` keeps the step-0 frame).
+        ``every <= 0`` (``thermo 0``: only first and last step) dumps those two.
+        """
+        if every <= 0:
+            every = max(last_step, 1)
+        return [
+            f'variable pwl_next_dump equal "ternary(step+{every}<{last_step},'
+            f'step+{every},ternary(step<{last_step},{last_step},step+{every}))"',
+            "dump_modify 1 every v_pwl_next_dump first yes",
+        ]
 
     def write_input_file(self, structure: Atoms) -> str:
         """
@@ -289,26 +331,37 @@ class LammpsEngine:
         return path
 
     def get_calculate_fn(self, structure: Atoms) -> tuple[Callable, dict[str, Any]]:
-        if self.calc_fn is None:
-            from pyiron_workflow_lammps.lammps import lammps_calculator_fn
+        """Return ``(calc_fn, kwargs)``; the caller runs ``calc_fn(structure=..., **kwargs)``.
 
-            self.potential_elements = self.get_lammps_element_order(structure)
-            self.calc_fn = lammps_calculator_fn
-            self.calc_fn_kwargs = {
-                "working_directory": self.working_directory,
-                "lammps_input": self._build_script(structure),
-                "potential_elements": self.potential_elements,
-                "input_filename": self.input_filename,
-                "command": self.command,
-                "lammps_log_filepath": self.lammps_log_filepath,
-                "units": self.input_script_units,
-                "lammps_log_convergence_printout": self.lammps_log_convergence_printout,
-            }
-        return self.calc_fn, self.calc_fn_kwargs
+        A user-supplied ``calc_fn`` is returned with a copy of ``calc_fn_kwargs``.
+        Otherwise the default LAMMPS runner is returned with kwargs built for
+        this ``structure``; a custom ``parse_fn`` is passed on to it.
+        """
+        if self.calc_fn is not None:
+            return self.calc_fn, dict(self.calc_fn_kwargs)
 
-    def get_parse_fn(self) -> Callable:
+        from pyiron_workflow_lammps.lammps import lammps_calculator_fn
+
+        calc_fn_kwargs = {
+            "working_directory": self.working_directory,
+            "lammps_input": self._build_script(structure),
+            "potential_elements": self._potential_elements(structure),
+            "input_filename": self.input_filename,
+            "command": self.command,
+            "lammps_log_filepath": self.lammps_log_filepath,
+            "units": self.input_script_units,
+            "lammps_log_convergence_printout": self.lammps_log_convergence_printout,
+            "lammps_structure_filepath": self.input_script_read_data_file,
+            "dump_out_file_name": self.input_script_dump_filename,
+        }
+        if self.parse_fn is not None:
+            calc_fn_kwargs["_lammps_parser_function"] = self.parse_fn
+            calc_fn_kwargs["_lammps_parser_args"] = dict(self.parse_fn_kwargs)
+        return lammps_calculator_fn, calc_fn_kwargs
+
+    def get_parse_fn(self) -> tuple[Callable, dict[str, Any]]:
         if self.parse_fn is None:
             from pyiron_workflow_lammps.lammps import parse_LammpsOutput
 
-            self.parse_fn = parse_LammpsOutput
+            return parse_LammpsOutput, self.parse_fn_kwargs
         return self.parse_fn, self.parse_fn_kwargs
