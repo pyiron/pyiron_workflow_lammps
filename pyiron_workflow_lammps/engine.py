@@ -196,8 +196,9 @@ class LammpsEngine:
                 lines.append(
                     f"fix 1 all box/relax {self.input_script_relax_type} {self.input_script_relax_pressure:.6f} vmax {self.input_script_relax_vmax}"
                 )
+            # Dump on the thermo steps so trajectory frames and energies align
             lines += self._final_frame_dump(
-                self.input_script_dump_every, max_iterations
+                self.input_script_thermo_every, max_iterations
             )
             lines += [
                 f"min_style {self.input_script_min_style}",
@@ -208,11 +209,12 @@ class LammpsEngine:
             # MD run: velocities & thermostat/integrator
             md = self.EngineInput
             # seed=None means non-deterministic (CalcInputMD contract); LAMMPS
-            # needs an explicit positive seed, so draw one per script.
+            # needs an explicit positive seed, so draw one per script. The
+            # Marsaglia RNG behind fix langevin accepts at most 900000000.
             seed = (
                 md.seed
                 if md.seed is not None
-                else random.SystemRandom().randint(1, 2**31 - 1)
+                else random.SystemRandom().randint(1, 900_000_000)
             )
             T0 = (
                 md.initial_temperature
@@ -245,9 +247,11 @@ class LammpsEngine:
                         f"fix 1 all nvt temp {md.temperature} {md.temperature} {tdamp}"
                     )
                 elif md.thermostat == "berendsen":
+                    # temp/berendsen only rescales velocities; it does not integrate
                     lines.append(
                         f"fix 1 all temp/berendsen {md.temperature} {md.temperature} {tdamp}"
                     )
+                    lines.append("fix 2 all nve")
                 elif md.thermostat == "andersen":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} {tdamp} {seed}"
@@ -256,12 +260,14 @@ class LammpsEngine:
                 elif md.thermostat == "temp/rescale":
                     delta = getattr(md, "delta_temp", None) or 0.0
                     lines.append(
-                        f"fix 1 all temp/rescale {md.n_print} {md.temperature} {md.temperature} {delta} units box"
+                        f"fix 1 all temp/rescale {max(md.n_print, 1)} {md.temperature} {md.temperature} {delta} 1.0"
                     )
+                    lines.append("fix 2 all nve")
                 elif md.thermostat == "temp/csvr":
                     lines.append(
-                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {tdamp}"
+                        f"fix 1 all temp/csvr {md.temperature} {md.temperature} {tdamp} {seed}"
                     )
+                    lines.append("fix 2 all nve")
                 elif md.thermostat == "langevin":
                     lines.append(
                         f"fix 1 all langevin {md.temperature} {md.temperature} "
@@ -272,6 +278,8 @@ class LammpsEngine:
                     raise ValueError(f"Unsupported thermostat: {md.thermostat}")
 
             elif md.mode == "NPT":
+                if md.pressure is None:
+                    raise ValueError("NPT mode requires CalcInputMD.pressure (in Pa)")
                 pressure_bar = md.pressure / 1e5  # 1 bar = 1e5 Pa
                 if md.thermostat != "nose-hoover":
                     raise ValueError("NPT mode supports only 'nose-hoover' thermostat")
@@ -287,7 +295,6 @@ class LammpsEngine:
             lines.append(f"thermo {md.n_print}")
             lines += self._final_frame_dump(md.n_print, md.n_ionic_steps)
             lines.append(f"run {md.n_ionic_steps}")
-            # print(lines)
         else:
             raise ValueError(f"Unknown mode: {self.mode}")
 
@@ -302,7 +309,10 @@ class LammpsEngine:
         could come from an earlier step than the final energy. Driving the
         dump with a variable that also returns ``last_step`` keeps the dump
         frames on the thermo steps (``first yes`` keeps the step-0 frame).
+        ``every <= 0`` (``thermo 0``: only first and last step) dumps those two.
         """
+        if every <= 0:
+            every = max(last_step, 1)
         return [
             f'variable pwl_next_dump equal "ternary(step+{every}<{last_step},'
             f'step+{every},ternary(step<{last_step},{last_step},step+{every}))"',

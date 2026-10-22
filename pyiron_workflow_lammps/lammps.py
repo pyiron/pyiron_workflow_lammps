@@ -102,9 +102,16 @@ def parse_LammpsOutput(
     _parser_fn=None,
     _parser_fn_kwargs=None,
     after: object = None,
+    structure: Atoms | None = None,
 ):
     """
     Parse a finished LAMMPS run into an ``EngineOutput``.
+
+    ``structure`` is the structure the run was set up from. LAMMPS needs a
+    lower-triangular cell, so cells that are not are rotated on the way in;
+    given the input structure, positions, cells, forces and pressures are
+    rotated back into its frame. Without it the frame of
+    ``lammps_structure_filepath`` (LAMMPS' own) is used.
 
     ``final_energy`` and ``energies`` are the potential energy (thermo
     ``pe``/``PotEng``), the energy the forces are the negative gradient of.
@@ -127,6 +134,7 @@ def parse_LammpsOutput(
     """
     from ase.io.lammpsdata import read_lammps_data
     from lammpsparser import parse_lammps_output_files
+    from lammpsparser.structure import UnfoldingPrism
     from pyiron_workflow_atomistics.engine import EngineOutput
 
     if isinstance(after, ShellOutput) and after.return_code != 0:
@@ -146,11 +154,18 @@ def parse_LammpsOutput(
                 f"Error parsing LAMMPS output: {e}, you must provide a parser function (_parser_fn) and kwargs (_parser_fn_kwargs) if you want to use a custom parser."
             )
 
+        reference = (
+            structure
+            if structure is not None
+            else read_lammps_data(
+                os.path.join(working_directory, lammps_structure_filepath)
+            )
+        )
+        if prism is None:
+            prism = UnfoldingPrism(reference.cell)
         lammpsparser_output = parse_lammps_output_files(
             working_directory=working_directory,
-            structure=read_lammps_data(
-                os.path.join(working_directory, lammps_structure_filepath)
-            ),
+            structure=reference,
             potential_elements=potential_elements,
             units=units,
             prism=prism,
@@ -168,11 +183,12 @@ def parse_LammpsOutput(
         # momenta (needed for kinetic temperature in coexistence analyses).
         generic_traj = lammpsparser_output["generic"]
         velocities_traj = generic_traj.get("velocities")
+        cells_traj = _cells_in_reference_basis(generic_traj["cells"], reference)
         atoms_list = []
-        for i in range(len(generic_traj["cells"])):
+        for i in range(len(cells_traj)):
             atoms_list.append(
                 arrays_to_ase_atoms(
-                    cells=generic_traj["cells"][i],
+                    cells=cells_traj[i],
                     positions=generic_traj["positions"][i],
                     indices=generic_traj["indices"][i],
                     species_lists=species_lists,
@@ -193,6 +209,11 @@ def parse_LammpsOutput(
         energies_traj = generic_traj["energy_pot"]
         forces_traj = generic_traj["forces"]
         stresses_traj = generic_traj["pressures"]
+        rotation = np.asarray(prism.R)
+        if not np.allclose(rotation, np.eye(3), rtol=0.0, atol=1e-8):
+            # lammpsparser (<= 0.0.10) only applies its pressure rotation when
+            # the rotation is the identity, so pressures stay in LAMMPS' frame.
+            stresses_traj = rotation @ np.asarray(stresses_traj) @ rotation.T
 
         # lammpsparser's "generic" dict holds the step numbers of the thermo
         # output under "steps" (older versions: "step"); the last one is the
@@ -226,6 +247,25 @@ def parse_LammpsOutput(
             )
 
     return lammps_EngineOutput
+
+
+def _cells_in_reference_basis(cells, reference: Atoms) -> np.ndarray:
+    """Express the trajectory cells in the basis of the input cell.
+
+    LAMMPS limits the tilt factors, so it may describe the input lattice with
+    different (shorter) lattice vectors. If the first frame's cell is an
+    integer basis change of the reference cell, apply that change to every frame.
+    """
+    cells = np.asarray(cells, dtype=float)
+    if len(cells) == 0 or np.abs(np.linalg.det(cells[0])) < 1e-12:
+        return cells
+    basis_change = np.asarray(reference.cell) @ np.linalg.inv(cells[0])
+    integer_change = np.rint(basis_change)
+    if not np.allclose(basis_change, integer_change, atol=1e-6) or np.allclose(
+        integer_change, np.eye(3)
+    ):
+        return cells
+    return np.einsum("ij,njk->nik", integer_change, cells)
 
 
 def _minimization_converged(log_path: str) -> bool:
@@ -383,6 +423,7 @@ def lammps_job(
         _parser_fn=_lammps_parser_function,
         _parser_fn_kwargs=_lammps_parser_args,
         after=job,
+        structure=structure,
     )
     return lammps_output
 
