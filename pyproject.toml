@@ -100,6 +100,7 @@ select = [
 ignore = [
     "E501",     # line length
     "PLR0913",  # too many args
+    "PLR0917",  # too many positional args (node signatures are keyword-wired)
     "PLR2004",  # magic values
     "PLC0414",  # import alias does not rename
     "PLR0912",  # too many branches

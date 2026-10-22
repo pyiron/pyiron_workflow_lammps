@@ -20,6 +20,12 @@ class LammpsEngine:
     Mode is inferred from EngineInput by checking key attributes; boilerplate defaults
     are defined on the engine via `input_script_*` attributes.
     Thermostat and ensemble logic is implemented directly here.
+
+    The engine is never mutated by use: ``get_calculate_fn`` builds the input
+    script for each structure it is given, so one engine (and copies made with
+    ``with_working_directory`` or ``dataclasses.replace``) can be reused across
+    structures and threads. ``potential_elements=None`` means "the structure's
+    elements in order of first occurrence".
     """
 
     EngineInput: CalcInputStatic | CalcInputMinimize | CalcInputMD
@@ -92,17 +98,13 @@ class LammpsEngine:
     def with_working_directory(self, subdir: str) -> "LammpsEngine":
         """Return a copy of this engine with working_directory composed.
 
-        Pure — never mutates self. Re-initialises self.calc_fn /
-        self.calc_fn_kwargs to None on the copy so the next
-        get_calculate_fn() call rebuilds the script against the new
-        directory (otherwise the sub-engine would inherit the parent's
-        stale cached kwargs).
+        Pure — never mutates self. Nothing is cached on the engine, so the
+        copy builds its script against the new directory, and a custom
+        ``calc_fn``/``parse_fn`` carries over.
         """
         return replace(
             self,
             working_directory=os.path.join(self.working_directory, subdir),
-            calc_fn=None,
-            calc_fn_kwargs=None,
         )
 
     def get_lammps_element_order(self, atoms: Atoms) -> list[str]:
@@ -132,18 +134,18 @@ class LammpsEngine:
                 "Keeping existing 'mode' (not overwriting). Ensure they agree.",
                 RuntimeWarning,
             )
-        else:
-            warnings.warn(
-                f"'mode' already set to '{current}' and also implied by EngineInput; no change.",
-                RuntimeWarning,
-            )
         return current
+
+    def _potential_elements(self, structure: Atoms) -> list[str]:
+        if self.potential_elements is not None:
+            return list(self.potential_elements)
+        return self.get_lammps_element_order(structure)
 
     def _build_script(self, structure: Atoms) -> str:
         # Boilerplate header
-        self.potential_elements = self.get_lammps_element_order(structure)
+        potential_elements = self._potential_elements(structure)
 
-        pair_coeff = ("*", "*", self.path_to_model, " ".join(self.potential_elements))
+        pair_coeff = ("*", "*", self.path_to_model, " ".join(potential_elements))
         boundary = (
             self.input_script_boundary
             if isinstance(self.input_script_boundary, str)
@@ -171,7 +173,6 @@ class LammpsEngine:
             "",
         ]
         self.toggle_mode()
-        print("current mode ", self.mode)
         # Mode-specific sections
         if self.mode == "static":
             lines += [f"min_style {self.input_script_min_style}", "minimize 0 0 0 0"]
@@ -289,26 +290,35 @@ class LammpsEngine:
         return path
 
     def get_calculate_fn(self, structure: Atoms) -> tuple[Callable, dict[str, Any]]:
-        if self.calc_fn is None:
-            from pyiron_workflow_lammps.lammps import lammps_calculator_fn
+        """Return ``(calc_fn, kwargs)``; the caller runs ``calc_fn(structure=..., **kwargs)``.
 
-            self.potential_elements = self.get_lammps_element_order(structure)
-            self.calc_fn = lammps_calculator_fn
-            self.calc_fn_kwargs = {
-                "working_directory": self.working_directory,
-                "lammps_input": self._build_script(structure),
-                "potential_elements": self.potential_elements,
-                "input_filename": self.input_filename,
-                "command": self.command,
-                "lammps_log_filepath": self.lammps_log_filepath,
-                "units": self.input_script_units,
-                "lammps_log_convergence_printout": self.lammps_log_convergence_printout,
-            }
-        return self.calc_fn, self.calc_fn_kwargs
+        A user-supplied ``calc_fn`` is returned with a copy of ``calc_fn_kwargs``.
+        Otherwise the default LAMMPS runner is returned with kwargs built for
+        this ``structure``; a custom ``parse_fn`` is passed on to it.
+        """
+        if self.calc_fn is not None:
+            return self.calc_fn, dict(self.calc_fn_kwargs)
 
-    def get_parse_fn(self) -> Callable:
+        from pyiron_workflow_lammps.lammps import lammps_calculator_fn
+
+        calc_fn_kwargs = {
+            "working_directory": self.working_directory,
+            "lammps_input": self._build_script(structure),
+            "potential_elements": self._potential_elements(structure),
+            "input_filename": self.input_filename,
+            "command": self.command,
+            "lammps_log_filepath": self.lammps_log_filepath,
+            "units": self.input_script_units,
+            "lammps_log_convergence_printout": self.lammps_log_convergence_printout,
+        }
+        if self.parse_fn is not None:
+            calc_fn_kwargs["_lammps_parser_function"] = self.parse_fn
+            calc_fn_kwargs["_lammps_parser_args"] = dict(self.parse_fn_kwargs)
+        return lammps_calculator_fn, calc_fn_kwargs
+
+    def get_parse_fn(self) -> tuple[Callable, dict[str, Any]]:
         if self.parse_fn is None:
             from pyiron_workflow_lammps.lammps import parse_LammpsOutput
 
-            self.parse_fn = parse_LammpsOutput
+            return parse_LammpsOutput, self.parse_fn_kwargs
         return self.parse_fn, self.parse_fn_kwargs

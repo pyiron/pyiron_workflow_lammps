@@ -9,9 +9,8 @@ import subprocess
 import tarfile
 from pathlib import Path
 
-import pyiron_workflow as pwf
+import flowrep as fr
 from pyiron_snippets.logger import logger
-from pyiron_workflow import Workflow
 
 
 class Storage:
@@ -77,12 +76,13 @@ class FileObject:
         return self._path.name
 
 
-@Workflow.wrap.as_function_node("output")
+@fr.atomic("output")
 def shell(
     command: str,
     working_directory: str | None = None,
     environment: dict[str, str] | None = None,
     arguments: list[str] | None = None,
+    after: object = None,
 ) -> ShellOutput:
     """
     Run a shell command in the specified working directory.
@@ -91,13 +91,21 @@ def shell(
         command (str): The command to execute.
         working_directory (str | None, optional): The working directory. Defaults to None.
         environment (Optional[dict[str, str]], optional): Environment variables to set. Defaults to None.
-        arguments (Optional[list[str]], optional): Command line arguments. Defaults to None.
+        arguments (Optional[list[str]], optional): Command line arguments appended
+            to ``command``. Defaults to None.
+        after: An ordering token. It is never read, but accepting it lets a
+            caller create a data edge that forces this node to run after
+            another. pyiron_workflow 0.19 has no execution signals, so
+            ordering must come from data flow.
 
     Returns:
         ShellOutput: Object containing stdout, stderr, and return code.
+
+    Note:
+        Never calls ``os.chdir``: ``subprocess.run``'s ``cwd`` scopes the child
+        process, and pyiron_workflow >= 0.19 runs sibling nodes on separate
+        threads, so changing the process cwd would race.
     """
-    # curr_dir = os.getcwd()
-    # os.chdir(working_directory)
     logger.info(f"shell is in {working_directory}")
     if environment is None:
         environment = {}
@@ -105,8 +113,11 @@ def shell(
         arguments = []
     environ = dict(os.environ)
     environ.update({k: str(v) for k, v in environment.items()})
+    # With shell=True the command must be one string: a list silently drops
+    # every element after the first on POSIX.
+    full_command = " ".join([command, *map(str, arguments)]) if arguments else command
     proc = subprocess.run(
-        [command, *map(str, arguments)],
+        full_command,
         check=False,
         capture_output=True,
         cwd=working_directory,
@@ -118,11 +129,10 @@ def shell(
     output.stdout = proc.stdout
     output.stderr = proc.stderr
     output.return_code = proc.returncode
-    # os.chdir(curr_dir)
     return output
 
 
-@Workflow.wrap.as_function_node("line_found")
+@fr.atomic("line_found")
 def isLineInFile(filepath: str, line: str, exact_match: bool = True) -> bool:
     """
     Check if a specific line exists in a file.
@@ -152,7 +162,7 @@ def isLineInFile(filepath: str, line: str, exact_match: bool = True) -> bool:
     return line_found
 
 
-@pwf.as_function_node("working_directory")
+@fr.atomic("working_directory")
 def create_WorkingDirectory(working_directory: str, quiet: bool = False) -> str:
     """
     Create a working directory if it doesn't exist.
@@ -180,7 +190,7 @@ def create_WorkingDirectory(working_directory: str, quiet: bool = False) -> str:
     return working_directory
 
 
-@Workflow.wrap.as_function_node("working_directory")
+@fr.atomic("working_directory")
 def delete_files_recursively(working_directory: str, files_to_be_deleted: list[str]):
     """
     Recursively delete specific files in a directory and its subdirectories.
@@ -204,7 +214,7 @@ def delete_files_recursively(working_directory: str, files_to_be_deleted: list[s
     return working_directory
 
 
-@Workflow.wrap.as_function_node("compressed_file")
+@fr.atomic("compressed_file")
 def compress_directory(
     directory_path: str,
     exclude_files=[],
@@ -281,71 +291,7 @@ def compress_directory(
     return output_file
 
 
-def submit_to_slurm(
-    node,
-    /,
-    job_name=None,
-    output_file=None,
-    error_file=None,
-    time_limit="00:05:00",
-    partition="s.cmmg",
-    nodes=1,
-    ntasks=1,
-    cpus_per_task=1,
-    memory="1GB",
-):
-    """
-    An example of a helper function for running nodes on slurm.
-
-    - Saves the node
-    - Writes a slurm batch script that
-        - Loads the node
-        - Runs it
-        - Saves it again
-    - Runs the batch script
-    """
-    if node.graph_root is not node:
-        raise ValueError(
-            f"Can only submit parent-most nodes, but {node.full_label} "
-            f"has root {node.graph_root.full_label}"
-        )
-
-    node.save(backend="pickle")
-    p = node.as_path()
-
-    if job_name is None:
-        job_name = node.full_label
-        job_name = job_name.replace(node.lexical_delimiter, "_")
-        job_name = "pwf" + job_name
-
-    script_content = f"""#!/bin/bash
-#SBATCH --job-name={job_name} 
-#SBATCH --output={p.joinpath("slurm.out").resolve() if output_file is None else output_file}
-#SBATCH --error={p.joinpath("slurm.err").resolve() if error_file is None else error_file}
-#SBATCH --time={time_limit}
-#SBATCH --partition={partition}
-#SBATCH --nodes={nodes}
-#SBATCH --ntasks={ntasks}
-#SBATCH --cpus-per-task={cpus_per_task}
-#SBATCH --mem={memory}
-
-# Execute Python script inline
-python - <<EOF
-from pyiron_workflow import PickleStorage
-node = PickleStorage().load(filename="{node.as_path().joinpath('picklestorage').resolve()}")  # Load
-node.run()  # Run
-node.save(backend="pickle")  # Save again
-EOF
-"""
-    submission_script = p.joinpath("node_submission.sh")
-    submission_script.write_text(script_content)
-    import subprocess
-
-    submission = subprocess.run(["sbatch", submission_script.resolve()], check=False)
-    return submission
-
-
-@Workflow.wrap.as_function_node("compressed_file")
+@fr.atomic("compressed_file")
 def remove_dir(directory_path, actually_remove=False):
     if actually_remove:
         shutil.rmtree(directory_path, ignore_errors=True)

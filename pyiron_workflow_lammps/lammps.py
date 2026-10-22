@@ -3,15 +3,17 @@ import os
 from collections.abc import Callable
 from typing import Any
 
+import flowrep as fr
 import numpy as np
-
-# Local imports
-import pyiron_workflow as pwf
 from ase import Atoms
 from pyiron_snippets.logger import logger
 
+from pyiron_workflow_lammps.generic import create_WorkingDirectory, isLineInFile, shell
 
-@pwf.as_function_node("working_directory")
+DEFAULT_COMMAND = "lmp -in in.lmp -log log.lammps"
+
+
+@fr.atomic("working_directory")
 def write_LammpsStructure(
     structure,
     working_directory,
@@ -31,7 +33,7 @@ def write_LammpsStructure(
     return working_directory
 
 
-@pwf.as_function_node("filepath")
+@fr.atomic("filepath")
 def write_LammpsInput(
     lammps_input: str, filename: str, working_directory: str | None = None
 ) -> str:
@@ -68,7 +70,7 @@ def write_LammpsInput(
     return path
 
 
-@pwf.as_function_node("lammps_output")
+@fr.atomic("lammps_output")
 def parse_LammpsOutput(
     working_directory: str,
     potential_elements: list[str],
@@ -80,14 +82,27 @@ def parse_LammpsOutput(
     log_lammps_convergence_printout: str = "Total wall time:",
     _parser_fn=None,
     _parser_fn_kwargs=None,
+    after: object = None,
 ):
+    """
+    Parse a finished LAMMPS run into an ``EngineOutput``.
+
+    ``final_energy`` and ``energies`` are the potential energy (thermo
+    ``pe``/``PotEng``), the energy the forces are the negative gradient of.
+    The total energy (``etotal``) additionally contains the kinetic energy
+    of an MD run. ``final_stress`` and ``stresses`` are lammpsparser's
+    pressure tensors (GPa, compression positive), not ASE stress.
+    ``n_ionic_steps`` is the last LAMMPS step number of the run.
+
+    If ``_parser_fn`` is given it is called as ``_parser_fn(**_parser_fn_kwargs)``
+    instead, and its return value is passed through unchanged. ``after`` is an
+    ordering token that is never read (see :func:`generic.shell`).
+    """
     import warnings
 
     from ase.io.lammpsdata import read_lammps_data
     from lammpsparser import parse_lammps_output_files
     from pyiron_workflow_atomistics.engine import EngineOutput
-
-    from pyiron_workflow_lammps.generic import isLineInFile
 
     warnings.filterwarnings("ignore")
     if _parser_fn is None:
@@ -137,26 +152,30 @@ def parse_LammpsOutput(
                 )
             )
 
-        converged = isLineInFile.node_function(
+        converged = isLineInFile(
             filepath=os.path.join(working_directory, log_lammps_file_name),
             line=log_lammps_convergence_printout,
             exact_match=False,
         )
 
         final_atoms = atoms_list[-1]
-        energies_traj = lammpsparser_output["generic"]["energy_tot"]
-        forces_traj = lammpsparser_output["generic"]["forces"]
-        stresses_traj = lammpsparser_output["generic"]["pressures"]
+        energies_traj = generic_traj["energy_pot"]
+        forces_traj = generic_traj["forces"]
+        stresses_traj = generic_traj["pressures"]
 
-        # lammpsparser's "generic" dict exposes per-step counters under
-        # either "steps" (older) or "step" (newer) — fall back to the
-        # trajectory length so we don't crash on a key rename.
-        generic = lammpsparser_output["generic"]
-        n_ionic_steps = generic.get("steps", generic.get("step", len(atoms_list)))
+        # lammpsparser's "generic" dict holds the step numbers of the thermo
+        # output under "steps" (older versions: "step"); the last one is the
+        # number of steps LAMMPS took. Fall back to the trajectory length.
+        steps = generic_traj.get("steps", generic_traj.get("step"))
+        n_ionic_steps = (
+            int(np.asarray(steps).reshape(-1)[-1])
+            if steps is not None and np.size(steps) > 0
+            else len(atoms_list) - 1
+        )
 
         lammps_EngineOutput = EngineOutput(
             final_structure=final_atoms,
-            final_energy=energies_traj[-1],
+            final_energy=float(energies_traj[-1]),
             converged=bool(converged),
             final_forces=forces_traj[-1],
             final_stress=stresses_traj[-1],  # 3x3 stress tensor
@@ -169,7 +188,7 @@ def parse_LammpsOutput(
         )
     else:
         try:
-            lammps_EngineOutput = _parser_fn(**_parser_fn_kwargs)
+            lammps_EngineOutput = _parser_fn(**(_parser_fn_kwargs or {}))
         except Exception as e:
             raise Exception(
                 f"Error parsing LAMMPS output: {e}, you must provide a parser function (_parser_fn) and kwargs (_parser_fn_kwargs) if you want to use a custom parser."
@@ -252,9 +271,8 @@ def arrays_to_ase_atoms(
     return atoms
 
 
-@pwf.as_macro_node("lammps_output")
+@fr.workflow("lammps_output")
 def lammps_job(
-    self,
     working_directory: str,
     structure: Atoms,
     lammps_input: str,
@@ -263,11 +281,11 @@ def lammps_job(
     lammps_structure_filepath: str = "lammps.data",
     input_filename: str = "in.lmp",
     dump_out_file_name: str = "dump.out",
-    command: str = "mpirun -np 40 --bind-to none /cmmc/ptmp/hmai/LAMMPS/lammps_grace/build/lmp -in in.lmp -log log.lammps",
+    command: str = DEFAULT_COMMAND,
     lammps_log_filepath: str = "log.lammps",
     lammps_log_convergence_printout: str = "Total wall time:",
     _lammps_parser_function: Callable[..., Any] | None = None,
-    _lammps_parser_args: dict[str, Any] = {},
+    _lammps_parser_args: dict[str, Any] | None = None,
 ):
     """
     Run a LAMMPS calculation end-to-end:
@@ -277,6 +295,11 @@ def lammps_job(
       4) shell out to LAMMPS
       5) parse results with an (optional) custom parser
 
+    pyiron_workflow 0.19 removed execution signals (``>>``/``starting_nodes``),
+    so the order is expressed as data edges: each step consumes the previous
+    step's output (``after=`` arguments are ordering tokens that are never
+    read).
+
     Args:
         working_directory: Path to the working directory.
         structure: ASE Atoms object to simulate.
@@ -284,63 +307,39 @@ def lammps_job(
         potential_elements: List of element symbols in the potential.
         input_filename: Name of the input script (default "in.lmp").
         command: Full MPI/launcher command to run LAMMPS.
-        lammps_parser_function: If provided, use this instead of the default parse_lammps_output.
-        lammps_parser_args: Dict of kwargs to pass to the parser function.
+        _lammps_parser_function: If provided, use this instead of the default parser.
+        _lammps_parser_args: Dict of kwargs to pass to the parser function.
 
     Returns:
         Parsed LAMMPS output (whatever the parser returns).
     """
-    from pyiron_workflow_lammps.generic import create_WorkingDirectory, shell
-
-    # 1) Create the directory
-    self.working_dir = create_WorkingDirectory(working_directory=working_directory)
-
-    # 2) Write the ASE structure to LAMMPS data
-    self.structure_writer = write_LammpsStructure(
+    wd_created = create_WorkingDirectory(working_directory=working_directory)
+    wd_structure = write_LammpsStructure(
         structure=structure,
+        working_directory=wd_created,
         potential_elements=potential_elements,
         units=units,
         file_name=lammps_structure_filepath,
-        working_directory=working_directory,
     )
-
-    # 3) Write the input script
-    self.input_writer = write_LammpsInput(
+    input_path = write_LammpsInput(
         lammps_input=lammps_input,
         filename=input_filename,
-        working_directory=working_directory,
+        working_directory=wd_structure,
     )
-
-    # 4) Run LAMMPS
-    self.job = shell(command=command, working_directory=working_directory)
-
-    # 5) Parse output (using custom or default parser)
-    self.lammps_output = parse_LammpsOutput(
-        working_directory=working_directory,
+    job = shell(command=command, working_directory=wd_structure, after=input_path)
+    lammps_output = parse_LammpsOutput(
+        working_directory=wd_structure,
         potential_elements=potential_elements,
         units=units,
-        prism=None,
         lammps_structure_filepath=lammps_structure_filepath,
         dump_out_file_name=dump_out_file_name,
         log_lammps_file_name=lammps_log_filepath,
         log_lammps_convergence_printout=lammps_log_convergence_printout,
         _parser_fn=_lammps_parser_function,
         _parser_fn_kwargs=_lammps_parser_args,
+        after=job,
     )
-
-    # Wire up the flow
-    (
-        self.working_dir
-        >> self.structure_writer
-        >> self.input_writer
-        >> self.job
-        >> self.lammps_output
-    )
-
-    # Register start
-    self.starting_nodes = [self.working_dir]
-
-    return self.lammps_output
+    return lammps_output
 
 
 def lammps_calculator_fn(
@@ -350,13 +349,18 @@ def lammps_calculator_fn(
     units: str,
     potential_elements: list[str],
     input_filename: str = "in.lmp",
-    command: str = "mpirun -np 40 --bind-to none /cmcm/ptmp/hmai/LAMMPS/lammps_grace/build/lmp -in in.lmp -log minimize.log",
+    command: str = DEFAULT_COMMAND,
     lammps_log_filepath: str = "log.lammps",
     lammps_log_convergence_printout: str = "Total wall time:",
     _lammps_parser_function: Callable[..., Any] | None = None,
-    _lammps_parser_args: dict[str, Any] = {},
+    _lammps_parser_args: dict[str, Any] | None = None,
 ):
-    output = lammps_job(
+    """The ``calc_fn`` LammpsEngine hands to ``pyiron_workflow_atomistics``.
+
+    Calls :func:`lammps_job` as plain Python (flowrep-decorated functions stay
+    directly callable), so it runs inside whatever node invoked the engine.
+    """
+    return lammps_job(
         working_directory=working_directory,
         structure=structure,
         lammps_input=lammps_input,
@@ -368,5 +372,4 @@ def lammps_calculator_fn(
         lammps_log_convergence_printout=lammps_log_convergence_printout,
         _lammps_parser_function=_lammps_parser_function,
         _lammps_parser_args=_lammps_parser_args,
-    )()
-    return output["lammps_output"]
+    )
