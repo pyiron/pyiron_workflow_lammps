@@ -1,50 +1,54 @@
 [build-system]
 requires = [
-    "setuptools>=68.0.0",
+    # >=77 for the PEP 639 SPDX `license` string below.
+    "setuptools>=77",
     "versioneer[toml]==0.29",
-    "wheel",
 ]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyiron_workflow_lammps"
+dynamic = ["version"]
 description = "A LAMMPS workflow integration package for pyiron"
 readme = "README.md"
 keywords = ["pyiron", "lammps", "workflow", "molecular-dynamics", "materials-science"]
-requires-python = ">=3.11, <3.13"
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Topic :: Scientific/Engineering",
-    "License :: OSI Approved :: BSD License",
-    "Intended Audience :: Science/Research",
-    "Operating System :: POSIX :: Linux",
-    "Operating System :: MacOS",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-]
-dependencies = [
-    "numpy==1.26.4",
-    "pandas==3.0.3",
-    "matplotlib==3.10.9",
-    "ase==3.28.0",
-    "scipy==1.17.1",
-    "pyiron-workflow==0.15.6",
-    "pyiron-workflow-atomistics==0.0.7",
-    "pymatgen==2026.5.4",
-    "pyiron_snippets==1.2.1",
-    "scikit-learn==1.8.0",
-    "lz-GB-code==0.1.0",
-    "tqdm==4.67.3",
-    "lammpsparser==0.0.7",
-]
-dynamic = ["version"]
+requires-python = ">=3.11, <3.15"
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [
     { name = "pyiron Team", email = "pyiron@mpie.de" },
 ]
-
-[project.license]
-file = "LICENSE"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Topic :: Scientific/Engineering",
+    "Intended Audience :: Science/Research",
+    "Operating System :: POSIX :: Linux",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+]
+dependencies = [
+    # Strict ==-pins match .ci_support/environment.yml. The release workflow
+    # (.github/workflows/release.yml) rewrites these to >=lower,<upper ranges
+    # before publishing: floors come from .ci_support/lower-bound.yml, caps
+    # from .ci_support/upper-bound.yml (every 0.x dep, which would otherwise be
+    # pinned exactly) or else the next minor version. Spellings matter to that
+    # rewrite: names are mapped through
+    # .github/actions/.support/pypi_vs_conda_names.json before the lookup.
+    # Only directly imported packages are listed; pyiron_workflow is the
+    # runtime that executes the flowrep nodes defined here.
+    "ase==3.29.0",
+    "flowrep==0.6.7",
+    "lammpsparser==0.0.10",
+    "numpy==2.4.6",
+    "pyiron_snippets==1.5.0",
+    "pyiron-workflow==0.20.3",
+    "pyiron-workflow-atomistics==0.3.0",
+    "pymatgen==2026.9.24",
+]
 
 [project.urls]
 Homepage = "https://github.com/pyiron/pyiron_workflow_lammps"
@@ -53,6 +57,12 @@ Repository = "https://github.com/pyiron/pyiron_workflow_lammps"
 "Bug Tracker" = "https://github.com/pyiron/pyiron_workflow_lammps/issues"
 
 [project.optional-dependencies]
+# Extras are not touched by the release rewrite, so they are written as
+# finished ranges.
+test = [
+    "pytest>=6.0",
+    "pytest-cov>=2.0",
+]
 dev = [
     "pytest>=6.0",
     "pytest-cov>=2.0",
@@ -64,23 +74,17 @@ notebook = [
     "jupyter>=1.0.0",
     "notebook>=6.0.0",
 ]
-cluster = [
-    "pysqa==0.4.2",
-    "h5py==3.16.0",
-]
 
 [tool.versioneer]
 VCS = "git"
 style = "pep440-pre"
 versionfile_source = "pyiron_workflow_lammps/_version.py"
-parentdir_prefix = "pyiron_workflow_lammps"
+versionfile_build = "pyiron_workflow_lammps/_version.py"
+parentdir_prefix = "pyiron_workflow_lammps-"
 tag_prefix = "pyiron_workflow_lammps-"
 
 [tool.setuptools.packages.find]
 include = ["pyiron_workflow_lammps*"]
-
-[tool.setuptools.dynamic.version]
-attr = "pyiron_workflow_lammps.__version__"
 
 [tool.ruff]
 exclude = ["docs", "notebooks", "setup.py", "_version.py", ".github"]
@@ -131,6 +135,22 @@ extend-exclude = '''
   ^/docs
 )
 '''
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra"
+testpaths = ["tests"]
+# Mirrors tests/conftest.py, which registers the same markers in code so a
+# copy of tests/ run against an installed wheel knows them too.
+markers = [
+    "integration: runs a real LAMMPS binary ('lmp' on PATH, or the LAMMPS_COMMAND environment variable); skipped when none is found",
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+]
+# Only escalate SyntaxWarnings from this package: third-party modules compiled
+# fresh in a new env would otherwise turn into collection errors.
+# Compile-time warnings carry the source *path* (minus .py) as their module,
+# hence a path regex rather than a dotted name.
+filterwarnings = ['error::SyntaxWarning:.*pyiron_workflow_lammps[/\\]\w+\Z']
 
 [tool.mypy]
 exclude = [
