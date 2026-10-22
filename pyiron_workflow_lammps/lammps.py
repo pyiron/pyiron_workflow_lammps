@@ -1,5 +1,6 @@
 # Standard library imports
 import os
+import warnings
 from collections.abc import Callable
 from typing import Any
 
@@ -8,9 +9,27 @@ import numpy as np
 from ase import Atoms
 from pyiron_snippets.logger import logger
 
-from pyiron_workflow_lammps.generic import create_WorkingDirectory, isLineInFile, shell
+from pyiron_workflow_lammps.generic import (
+    ShellOutput,
+    create_WorkingDirectory,
+    isLineInFile,
+    shell,
+)
 
 DEFAULT_COMMAND = "lmp -in in.lmp -log log.lammps"
+
+# lammpsparser warns on every parse that it has no unit conversion for the
+# per-atom energy compute (``c_eng``) in our dump; the values are already eV.
+warnings.filterwarnings(
+    "ignore",
+    message=".*unit conversion type of quantity eng.*",
+    category=UserWarning,
+)
+
+# LAMMPS minimizer stopping criteria that mean the tolerances were met.
+# Anything else ("max iterations", "max force evaluations", "linesearch alpha
+# is zero", ...) stopped the minimization before convergence.
+CONVERGED_STOPPING_CRITERIA = ("energy tolerance", "force tolerance", "forces are zero")
 
 
 @fr.atomic("working_directory")
@@ -94,17 +113,28 @@ def parse_LammpsOutput(
     pressure tensors (GPa, compression positive), not ASE stress.
     ``n_ionic_steps`` is the last LAMMPS step number of the run.
 
-    If ``_parser_fn`` is given it is called as ``_parser_fn(**_parser_fn_kwargs)``
-    instead, and its return value is passed through unchanged. ``after`` is an
-    ordering token that is never read (see :func:`generic.shell`).
-    """
-    import warnings
+    ``converged`` requires the log's ``log_lammps_convergence_printout`` line
+    and, for a minimization, a stopping criterion that means the tolerances
+    were met (see ``CONVERGED_STOPPING_CRITERIA``).
 
+    If ``_parser_fn`` is given it is called as ``_parser_fn(**_parser_fn_kwargs)``
+    instead, and its return value is passed through unchanged.
+
+    ``after`` orders this node after the LAMMPS run. When it is the run's
+    :class:`generic.ShellOutput` (as in :func:`lammps_job`) and the command
+    failed, a ``RuntimeError`` with its output is raised instead of parsing
+    whatever files an earlier run left in ``working_directory``.
+    """
     from ase.io.lammpsdata import read_lammps_data
     from lammpsparser import parse_lammps_output_files
     from pyiron_workflow_atomistics.engine import EngineOutput
 
-    warnings.filterwarnings("ignore")
+    if isinstance(after, ShellOutput) and after.return_code != 0:
+        raise RuntimeError(
+            f"LAMMPS command exited with return code {after.return_code} in "
+            f"{working_directory}.\n--- stdout (tail) ---\n{after.stdout[-2000:]}"
+            f"\n--- stderr (tail) ---\n{after.stderr[-2000:]}"
+        )
     if _parser_fn is None:
         try:
             lammps_EngineOutput = read_lammps_data(
@@ -152,11 +182,12 @@ def parse_LammpsOutput(
                 )
             )
 
+        log_path = os.path.join(working_directory, log_lammps_file_name)
         converged = isLineInFile(
-            filepath=os.path.join(working_directory, log_lammps_file_name),
+            filepath=log_path,
             line=log_lammps_convergence_printout,
             exact_match=False,
-        )
+        ) and _minimization_converged(log_path)
 
         final_atoms = atoms_list[-1]
         energies_traj = generic_traj["energy_pot"]
@@ -195,6 +226,20 @@ def parse_LammpsOutput(
             )
 
     return lammps_EngineOutput
+
+
+def _minimization_converged(log_path: str) -> bool:
+    """False if the log's last minimizer stopping criterion is not a converged one.
+
+    Logs without a minimization (static ``run 0``, MD) have no stopping
+    criterion and count as converged.
+    """
+    criterion = None
+    with open(log_path) as f:
+        for line in f:
+            if "Stopping criterion =" in line:
+                criterion = line.split("=", 1)[1].strip()
+    return criterion is None or criterion in CONVERGED_STOPPING_CRITERIA
 
 
 def get_structure_species_lists(
@@ -354,6 +399,8 @@ def lammps_calculator_fn(
     lammps_log_convergence_printout: str = "Total wall time:",
     _lammps_parser_function: Callable[..., Any] | None = None,
     _lammps_parser_args: dict[str, Any] | None = None,
+    lammps_structure_filepath: str = "lammps.data",
+    dump_out_file_name: str = "dump.out",
 ):
     """The ``calc_fn`` LammpsEngine hands to ``pyiron_workflow_atomistics``.
 
@@ -366,7 +413,9 @@ def lammps_calculator_fn(
         lammps_input=lammps_input,
         units=units,
         potential_elements=potential_elements,
+        lammps_structure_filepath=lammps_structure_filepath,
         input_filename=input_filename,
+        dump_out_file_name=dump_out_file_name,
         command=command,
         lammps_log_filepath=lammps_log_filepath,
         lammps_log_convergence_printout=lammps_log_convergence_printout,

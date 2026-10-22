@@ -174,9 +174,11 @@ def create_WorkingDirectory(working_directory: str, quiet: bool = False) -> str:
     Returns:
         str: Path to the created or existing directory.
     """
-    # Check if working_directory exists
-    if not os.path.exists(working_directory):
-        os.makedirs(working_directory)
+    # exist_ok: sibling nodes may create this directory (or a subdirectory of
+    # it) concurrently, so a check-then-create would race.
+    existed = os.path.isdir(working_directory)
+    os.makedirs(working_directory, exist_ok=True)
+    if not existed:
         logger.info(f"made directory '{working_directory}'")
     elif not quiet:
         logger.warning(

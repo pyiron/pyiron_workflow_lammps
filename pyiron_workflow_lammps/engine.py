@@ -1,4 +1,5 @@
 import os
+import random
 import textwrap
 import warnings
 from collections.abc import Callable
@@ -175,7 +176,7 @@ class LammpsEngine:
         self.toggle_mode()
         # Mode-specific sections
         if self.mode == "static":
-            lines += [f"min_style {self.input_script_min_style}", "minimize 0 0 0 0"]
+            lines += ["run 0"]
 
         elif self.mode == "minimize":
             energy_convergence_tolerance = self.EngineInput.energy_convergence_tolerance
@@ -195,6 +196,9 @@ class LammpsEngine:
                 lines.append(
                     f"fix 1 all box/relax {self.input_script_relax_type} {self.input_script_relax_pressure:.6f} vmax {self.input_script_relax_vmax}"
                 )
+            lines += self._final_frame_dump(
+                self.input_script_dump_every, max_iterations
+            )
             lines += [
                 f"min_style {self.input_script_min_style}",
                 f"minimize {energy_convergence_tolerance} {force_convergence_tolerance} {max_iterations} {max_evaluations}",
@@ -203,9 +207,18 @@ class LammpsEngine:
         elif self.mode == "md":
             # MD run: velocities & thermostat/integrator
             md = self.EngineInput
-            # seed=None would be written literally as 'None' into LAMMPS commands.
-            seed = md.seed if md.seed is not None else 12345
-            T0 = md.initial_temperature or md.temperature
+            # seed=None means non-deterministic (CalcInputMD contract); LAMMPS
+            # needs an explicit positive seed, so draw one per script.
+            seed = (
+                md.seed
+                if md.seed is not None
+                else random.SystemRandom().randint(1, 2**31 - 1)
+            )
+            T0 = (
+                md.initial_temperature
+                if md.initial_temperature is not None
+                else md.temperature
+            )
             # CalcInputMD time quantities are in FEMTOSECONDS (ASE/pwa convention), but
             # LAMMPS interprets times in the `units` system's native unit: ps for `metal`,
             # fs for `real`. Without this conversion `timestep 2.0` (meant as 2 fs) becomes
@@ -217,10 +230,11 @@ class LammpsEngine:
             dt = md.time_step * _time_fac
             tdamp = md.thermostat_time_constant * _time_fac
             pdamp = md.pressure_damping_timescale * _time_fac
-            # Velocity init
-            lines.append(
-                f"velocity all create {T0} {seed} mom yes rot yes dist gaussian"
-            )
+            # Velocity init (LAMMPS cannot create velocities at 0 K)
+            if T0 > 0:
+                lines.append(
+                    f"velocity all create {T0} {seed} mom yes rot yes dist gaussian"
+                )
             # Thermostat/integrator logic
             if md.mode == "NVE":
                 lines.append("fix 1 all nve")
@@ -271,12 +285,29 @@ class LammpsEngine:
             # Timestep, thermo frequency, and run
             lines.append(f"timestep {dt}")
             lines.append(f"thermo {md.n_print}")
+            lines += self._final_frame_dump(md.n_print, md.n_ionic_steps)
             lines.append(f"run {md.n_ionic_steps}")
             # print(lines)
         else:
             raise ValueError(f"Unknown mode: {self.mode}")
 
         return textwrap.dedent("\n".join(lines))
+
+    @staticmethod
+    def _final_frame_dump(every: int, last_step: int) -> list[str]:
+        """Dump every ``every`` steps *and* on ``last_step``.
+
+        Thermo output always includes the last step of a run, a plain
+        ``dump ... N`` only multiples of N, so the final structure/forces
+        could come from an earlier step than the final energy. Driving the
+        dump with a variable that also returns ``last_step`` keeps the dump
+        frames on the thermo steps (``first yes`` keeps the step-0 frame).
+        """
+        return [
+            f'variable pwl_next_dump equal "ternary(step+{every}<{last_step},'
+            f'step+{every},ternary(step<{last_step},{last_step},step+{every}))"',
+            "dump_modify 1 every v_pwl_next_dump first yes",
+        ]
 
     def write_input_file(self, structure: Atoms) -> str:
         """
@@ -310,6 +341,8 @@ class LammpsEngine:
             "lammps_log_filepath": self.lammps_log_filepath,
             "units": self.input_script_units,
             "lammps_log_convergence_printout": self.lammps_log_convergence_printout,
+            "lammps_structure_filepath": self.input_script_read_data_file,
+            "dump_out_file_name": self.input_script_dump_filename,
         }
         if self.parse_fn is not None:
             calc_fn_kwargs["_lammps_parser_function"] = self.parse_fn
