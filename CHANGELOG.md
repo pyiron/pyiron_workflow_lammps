@@ -4,6 +4,25 @@ All notable changes to `pyiron_workflow_lammps` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: PEP 440 via `versioneer`.
 
+## [Unreleased]
+
+### Changed (breaking)
+
+- **Python 3.12 to 3.14** (`requires-python = ">=3.12, <3.15"`); 3.11 is no
+  longer supported. Dropping it lets the CI pin follow numpy onto 2.5.x,
+  whose wheels require Python >= 3.12. The published floors
+  (`.ci_support/lower-bound.yml`) are unchanged apart from the interpreter;
+  the lower-bound CI leg now solves them on 3.12.
+
+### Changed
+
+- **`numpy` 2.4.6 -> 2.5.3** in the CI pins (`pyproject.toml`,
+  `.ci_support/environment.yml`, `.binder/environment.yml`,
+  `docs/environment.yml`). 2.5.3 rather than the current 2.5.4 because
+  `lammpsparser` 0.0.10 requires `numpy<=2.5.3` on PyPI and conda-forge.
+  The release cap stays `<2.6.0` (`pyiron_workflow_atomistics` 0.3.0
+  requires `numpy<2.6`).
+
 ## [0.2.0] — 2026-10-23
 
 Ports the package to `pyiron_workflow` >= 0.19, whose node API is

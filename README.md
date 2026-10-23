@@ -1,7 +1,7 @@
 # pyiron_workflow_lammps
 
 [![License: BSD-3](https://img.shields.io/badge/License-BSD_3--Clause-blue.svg)](LICENSE)
-[![Python](https://img.shields.io/badge/python-3.11%20%7C%203.12%20%7C%203.13%20%7C%203.14-blue.svg)](pyproject.toml)
+[![Python](https://img.shields.io/badge/python-3.12%20%7C%203.13%20%7C%203.14-blue.svg)](pyproject.toml)
 
 A LAMMPS engine for [`pyiron_workflow`](https://github.com/pyiron/pyiron_workflow) /
 [`pyiron_workflow_atomistics`](https://github.com/pyiron/pyiron_workflow_atomistics).
@@ -51,7 +51,7 @@ or run it as a node with `pyiron_workflow.node(fn).run(**inputs)` /
 
 ## Installation
 
-Linux or macOS, Python 3.11 to 3.14. Windows users should use WSL2
+Linux or macOS, Python 3.12 to 3.14. Windows users should use WSL2
 (conda-forge has no Windows build of `lammps`).
 
 ### From PyPI (you supply LAMMPS)
