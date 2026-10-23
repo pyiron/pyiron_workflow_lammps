@@ -9,9 +9,11 @@ channels:
 dependencies:
   - flowrep =0.7.0
   - lammpsparser =0.1.0
-  # The suite passes on numpy 2.5.3 / scipy 1.18.1; the pin stays on the
-  # newest 3.11-compatible numpy, so cap one minor above the newest tested
-  # (pyiron_workflow_atomistics 0.3.0 itself requires numpy<2.6).
+  # pyiron_workflow_atomistics 0.3.0 requires numpy<2.6. That is also the
+  # default next-minor cap for the 2.5.x pin, but it is written out so a
+  # dependabot bump onto 2.6.x trips the clean-install range check instead of
+  # publishing a range that extends past atomistics' cap, i.e. one that
+  # advertises the very numpy CI tested but the stack cannot install.
   - numpy =2.6.0
   - pymatgen =2027.0.0  # calendar-versioned; the default minor cap would be one month
   - pyiron_snippets =2.0.0

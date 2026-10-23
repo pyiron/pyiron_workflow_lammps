@@ -15,11 +15,11 @@ jobs:
       do-coveralls: false
       do-codecov: true
       # The main leg (all runners) is 3.12; the alternates run on the main
-      # runner only. Together they cover requires-python (3.11-3.14).
+      # runner only. Together they cover requires-python (3.12-3.14).
       python-version: '3.12'
-      python-version-alt1: '3.11'
-      python-version-alt2: '3.13'
-      python-version-alt3: '3.14'
+      python-version-alt1: '3.13'
+      python-version-alt2: '3.14'
+      python-version-alt3: 'exclude'
       # conda-forge lammps has no Windows build; drop windows from the runner
       # matrix so the conda solve doesn't kill the run.
       # (runner-alt1 = windows-latest; runner-alt2 = macos-latest, kept.)
@@ -30,7 +30,7 @@ jobs:
       # fails CI. tests/unit is unittest-collectable; LAMMPS is not in that
       # env, so the tests that run `lmp` skip.
       alternate-tests-env-files: .ci_support/lower-bound.yml
-      alternate-tests-python-version: '3.11'
+      alternate-tests-python-version: '3.12'
       alternate-tests-dir: tests/unit
       # The notebook plots with matplotlib, which is not a package dependency;
       # this env file adds it (also merged into .binder/environment.yml by
