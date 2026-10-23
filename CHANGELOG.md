@@ -4,7 +4,7 @@ All notable changes to `pyiron_workflow_lammps` are documented here.
 Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning: PEP 440 via `versioneer`.
 
-## [0.2.0] — unreleased
+## [0.2.0] — 2026-10-23
 
 Ports the package to `pyiron_workflow` >= 0.19, whose node API is
 [`flowrep`](https://github.com/pyiron/flowrep), and releases the fixes merged
