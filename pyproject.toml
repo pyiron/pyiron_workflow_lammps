@@ -43,7 +43,7 @@ dependencies = [
     "flowrep==0.6.7",
     "lammpsparser==0.0.10",
     # lammpsparser 0.0.10 requires numpy<=2.5.3 (on PyPI and conda-forge)
-    "numpy==2.5.3",
+    "numpy==2.5.4",
     "pyiron_snippets==1.5.0",
     "pyiron-workflow==0.20.3",
     "pyiron-workflow-atomistics==0.3.0",
