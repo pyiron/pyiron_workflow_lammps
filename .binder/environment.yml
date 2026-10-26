@@ -10,7 +10,7 @@ dependencies:
 - numpy =2.5.3
 - pyiron_snippets =1.5.0
 - pyiron_workflow =0.20.3
-- pyiron-workflow-atomistics =0.3.0
+- pyiron-workflow-atomistics =0.3.1
 - pymatgen =2026.9.24
 - lammps =2025.07.22=*nompi_2
 - pytest
