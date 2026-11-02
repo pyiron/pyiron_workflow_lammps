@@ -44,7 +44,7 @@ dependencies = [
     "lammpsparser==0.0.10",
     # lammpsparser 0.0.10 requires numpy<=2.5.3 (on PyPI and conda-forge)
     "numpy==2.5.3",
-    "pyiron_snippets==1.5.0",
+    "pyiron_snippets==1.5.1",
     "pyiron-workflow==0.20.3",
     "pyiron-workflow-atomistics==0.3.0",
     "pymatgen==2026.9.24",
